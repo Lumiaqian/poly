@@ -23,6 +23,7 @@ type Item struct {
 
 type FcousService struct {
 	huya      platform.HuYa
+	bilibili  platform.Bilibili
 	log       *wails.CustomLogger
 	fcousList FcousList
 	roomList  []liveroom.LiveRoomInfo
@@ -32,6 +33,7 @@ func NewFcousService() FcousService {
 	log := logger.NewCustomLogger("fcous")
 	return FcousService{
 		huya:      platform.NewHuYa(),
+		bilibili:  platform.NewBilibili(),
 		log:       log,
 		fcousList: FcousList{},
 		roomList:  []liveroom.LiveRoomInfo{},
@@ -50,21 +52,34 @@ func (f *FcousService) InitFcous(path string) error {
 	if err != nil {
 		return err
 	}
+	f.getFcousRoomInfo()
+	return nil
+}
+
+func (f *FcousService) GetFcousRoomInfo() []liveroom.LiveRoomInfo {
+	return f.getFcousRoomInfo()
+}
+
+func (f *FcousService) getFcousRoomInfo() []liveroom.LiveRoomInfo {
+	f.roomList = f.roomList[0:0]
 	for _, fcous := range f.fcousList.Fcous {
 		switch fcous.Platform {
 		case "huya":
 			roomInfo, err := f.huya.GetRoomInfo(fcous.RoomId)
 			if err != nil {
-				f.log.ErrorFields("GetRoomInfo Err", logger.Fields{"err": err})
+				f.log.ErrorFields("GetRoomInfo Huya Err", logger.Fields{"err": err})
+				continue
+			}
+			f.roomList = append(f.roomList, roomInfo)
+		case "bilibili":
+			roomInfo, err := f.bilibili.GetRoomInfo(fcous.RoomId)
+			if err != nil {
+				f.log.ErrorFields("GetRoomInfo Bilibili Err", logger.Fields{"err": err})
 				continue
 			}
 			f.roomList = append(f.roomList, roomInfo)
 		}
 	}
 	sort.Sort(liveroom.LiveRoomInfoArray(f.roomList))
-	return nil
-}
-
-func (f *FcousService) GetFcousRoomInfo() []liveroom.LiveRoomInfo {
 	return f.roomList
 }

@@ -6,18 +6,23 @@
         <div class="q-pa-xs col-xs-12 col-sm-6 col-md-3">
           <router-link :to="{ path: '/index/room', query: { platform: props.row.platform, roomId: props.row.roomId } }">
             <q-card>
-              <q-img :src=props.row.screenshot>
+              <q-img :src="props.row.screenshot">
                 <div class="absolute-bottom text-h8 text-left">
                   {{ props.row.gameFullName }}
                 </div>
                 <div class="absolute-bottom text-h8 text-right">
                   <q-icon name="person" />{{ props.row.count }}
                 </div>
+                <template v-slot:error>
+                  <div class="absolute-full flex flex-center bg-negative text-white">
+                    Cannot load image
+                  </div>
+                </template>
               </q-img>
               <q-item>
                 <q-item-section avatar>
                   <q-avatar>
-                    <img :src=props.row.avatar>
+                    <img :src="props.row.avatar">
                   </q-avatar>
                 </q-item-section>
                 <q-item-section>
@@ -87,7 +92,7 @@ export default {
         } else {
           roomInfo.isLive = false
         }
-        
+
         rows.push(roomInfo)
       })
       LogInfo('roomInfoSize: ' + rows.length)

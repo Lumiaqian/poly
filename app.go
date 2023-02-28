@@ -56,8 +56,10 @@ func (a *App) Greet(name string) string {
 
 // 获取直播流
 func (a *App) GetLiveRoom(platformName, roomId string) liveroom.LiveRoom {
+	a.log.InfoFields("GetLiveRoom", logger.Fields{"platformName": platformName})
 	room := liveroom.LiveRoom{}
-	if platformName == "huya" {
+	switch platformName {
+	case platform.Huya:
 		huya := platform.NewHuYa()
 		room, err := huya.GetLiveUrl(a.ctx, roomId)
 		if err != nil {
@@ -65,6 +67,15 @@ func (a *App) GetLiveRoom(platformName, roomId string) liveroom.LiveRoom {
 			return liveroom.LiveRoom{}
 		}
 		a.log.InfoFields("huya.GetLiveUrl", logger.Fields{"room": room})
+		return *room
+	case platform.Bili:
+		bilibili := platform.NewBilibili()
+		room, err := bilibili.GetLiveUrl(a.ctx, roomId)
+		if err != nil {
+			a.log.InfoFields("bilibili.GetLiveUrl", logger.Fields{"error": err})
+			return liveroom.LiveRoom{}
+		}
+		a.log.InfoFields("bilibili.GetLiveUrl", logger.Fields{"room": room})
 		return *room
 	}
 	return room
@@ -93,13 +104,21 @@ func (a *App) ChangeQualityFromD2Art(qualities []liveroom.Quality) []liveroom.Ar
 // 获取直播间详情
 func (a *App) GetLiveRoomInfo(platformName, roomId string) liveroom.LiveRoomInfo {
 	roomInfo := liveroom.LiveRoomInfo{}
+	a.log.InfoFields("GetLiveRoomInfo", logger.Fields{"platformName": platformName})
 	switch platformName {
-	case "huya":
-		a.log.InfoFields("GetLiveRoomInfo", logger.Fields{"platformName": platformName})
+	case platform.Huya:
 		huya := platform.NewHuYa()
 		roomInfo, err := huya.GetRoomInfo(roomId)
 		if err != nil {
 			a.log.ErrorFields("huya.GetRoomInfo Err", logger.Fields{"error": err})
+			return roomInfo
+		}
+		return roomInfo
+	case platform.Bili:
+		bilibili := platform.NewBilibili()
+		roomInfo, err := bilibili.GetRoomInfo(roomId)
+		if err != nil {
+			a.log.ErrorFields("bilibili.GetRoomInfo Err", logger.Fields{"error": err})
 			return roomInfo
 		}
 		return roomInfo
@@ -142,28 +161,25 @@ func (a *App) LoadFocus() []liveroom.LiveRoomInfo {
 	err = a.focusService.InitFcous(path)
 	//a.log.InfoFields("")
 	if err != nil {
-		_, err := runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
-			Title:         "加载关注列表",
-			Message:       "失败！",
-			Buttons:       []string{"Yes"},
-			DefaultButton: "Yes",
-		})
-		if err != nil {
-			a.log.ErrorFields("LoadFocus MessageDialog Err", logger.Fields{"err": err})
-		}
+		a.MessageDialog("加载关注列表", "失败！")
 		return nil
 	}
-	selection, err := runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
-		Title:         "加载关注列表",
-		Message:       "成功！",
+	a.MessageDialog("加载关注列表", "成功！")
+	list := a.GetFocus()
+	a.log.InfoFields("加载关注列表 成功！", logger.Fields{"focusList": list})
+	return list
+}
+
+// 消息弹窗
+func (a *App) MessageDialog(title, message string) {
+	_, err := runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
+		Title:         title,
+		Message:       message,
 		Buttons:       []string{"Yes"},
 		DefaultButton: "Yes",
 	})
 	if err != nil {
-		a.log.ErrorFields("LoadFocus MessageDialog Err", logger.Fields{"err": err})
-		return nil
+		a.log.ErrorFields("MessageDialog Err", logger.Fields{"err": err})
 	}
-	list := a.GetFocus()
-	a.log.InfoFields("加载关注列表 成功！", logger.Fields{"selection": selection, "focusList": list})
-	return list
+
 }

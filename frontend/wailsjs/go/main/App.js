@@ -26,6 +26,10 @@ export function LoadFocus() {
   return window['go']['main']['App']['LoadFocus']();
 }
 
+export function MessageDialog(arg1, arg2) {
+  return window['go']['main']['App']['MessageDialog'](arg1, arg2);
+}
+
 export function SelectFile() {
   return window['go']['main']['App']['SelectFile']();
 }

@@ -33,7 +33,7 @@ const (
 	GameFullName  = `\"gameFullName\":\"(.*?)\",`
 	ActivityCount = `\"activityCount\":(.*?),`
 	Introduction  = `\"introduction\":\"(.*?)\",`
-	LiveStatus    = `\"liveStatus-(.*?) on-match\"`
+	LiveStatus    = `\"liveStatus-(.*?)\"`
 )
 
 func NewHuYa() HuYa {
@@ -233,10 +233,17 @@ func (h *HuYa) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {
 	if err != nil {
 		return roomInfo, err
 	}
+	//h.log.InfoFields("房间详情元数据", logger.Fields{"result": string(result)})
 	roomInfo.Anchor = matchRoomInfo(string(result), Nick)
 	roomInfo.Avatar = matchRoomInfo(string(result), Avatar)
+	if roomInfo.Avatar != "" && !strings.Contains(roomInfo.Avatar, "https") {
+		roomInfo.Avatar = strings.ReplaceAll(roomInfo.Avatar, "http", "https")
+	}
 	roomInfo.GameFullName = matchRoomInfo(string(result), GameFullName)
 	roomInfo.Screenshot = matchRoomInfo(string(result), Screenshot)
+	if roomInfo.Screenshot != "" && !strings.Contains(roomInfo.Screenshot, "https") {
+		roomInfo.Screenshot = strings.ReplaceAll(roomInfo.Screenshot, "http", "https")
+	}
 	roomInfo.RoomName = matchRoomInfo(string(result), RoomName)
 	if roomInfo.RoomName == "" {
 		roomInfo.RoomName = matchRoomInfo(string(result), Introduction)
@@ -252,11 +259,10 @@ func (h *HuYa) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {
 		roomInfo.LiveStatus = 0
 	case "on":
 		roomInfo.LiveStatus = 2
+	case "on on-match":
+		roomInfo.LiveStatus = 2
 	case "replay":
 		roomInfo.LiveStatus = 1
-	}
-	if roomInfo.OnLineCount > 0 {
-		roomInfo.LiveStatus = 2
 	}
 	roomInfo.Platform = "huya"
 	roomInfo.PlatformName = liveroom.GetPlatform(roomInfo.Platform)

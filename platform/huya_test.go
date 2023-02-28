@@ -20,7 +20,7 @@ func TestGetLiveUrl(t *testing.T) {
 }
 
 func TestGetRoomInfo(t *testing.T) {
-	liveRoomInfo, err := huya.GetRoomInfo("222523")
+	liveRoomInfo, err := huya.GetRoomInfo("333003")
 	if err != nil {
 		t.Fail()
 	}

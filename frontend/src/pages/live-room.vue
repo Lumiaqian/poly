@@ -2,7 +2,7 @@
     <div class="room-main-container">
         <div class="room">
             <div class="room-video">
-                <DPlayer :platform="platform" :room-id="roomId" :is-live="isLive" :screenshot="roomInfo.screenshot"
+                <DPlayer :platform="platform" :room-id="roomId" :is-live="isLive()" :screenshot="roomInfo.screenshot"
                     class="room-video-play" />
             </div>
             <div class="room-info">
@@ -25,11 +25,13 @@
 </template>
    
 <script setup lang="ts">
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted, reactive,onBeforeMount } from 'vue'
 import DPlayer from 'components/DPlayer.vue';
 import { GetLiveRoomInfo, LogInfo } from '../../wailsjs';
-const platform = ref('huya')
-const roomId = ref('222523')
+import { useRoute } from 'vue-router'; 
+const route = useRoute()
+const platform = ref('')
+const roomId = ref('')
 const live = ref(true)
 const platformName = ref('')
 
@@ -47,23 +49,28 @@ const roomInfo = reactive({
 
 const initRoomInfo = () => GetLiveRoomInfo(platform.value, roomId.value).then((res) => {
     LogInfo('roomInfo: ' + JSON.stringify(res))
-    roomInfo.platform = res.platform
-    roomInfo.roomId = res.roomId
-    platform.value = res.platform
-    roomId.value = res.roomId
+    roomInfo.platform = res.platform;
+    roomInfo.roomId = res.roomId;
+    platform.value = res.platform;
+    roomId.value = res.roomId;
     if (res.liveStatus == 2) {
-        live.value = true
+        live.value = true;
     } else {
-        live.value = false
+        live.value = false;
     }
-    roomInfo.roomName = res.roomName
-    roomInfo.anchor = res.anchor
-    roomInfo.avatar = res.avatar
-    roomInfo.gameFullName = res.gameFullName
-    roomInfo.onLineCount = res.onLineCount
-    roomInfo.screenshot = res.screenshot
-    platformName.value = res.platformName
+    roomInfo.roomName = res.roomName;
+    roomInfo.anchor = res.anchor;
+    roomInfo.avatar = res.avatar;
+    roomInfo.gameFullName = res.gameFullName;
+    roomInfo.onLineCount = res.onLineCount;
+    roomInfo.screenshot = res.screenshot;
+    platformName.value = res.platformName;
     
+})
+
+onBeforeMount(() => {
+    platform.value = String(route.query.platform);
+    roomId.value = String(route.query.roomId);
 })
 
 onMounted(() => {
@@ -71,8 +78,8 @@ onMounted(() => {
 });
 
 function isLive(): boolean {
-    LogInfo('onMounted avatar: ' + roomInfo.avatar)
-    return live.value
+    LogInfo('onMounted avatar: ' + roomInfo.avatar);
+    return live.value;
 }
 
 
@@ -139,40 +146,6 @@ function isLive(): boolean {
     margin-top: 10px;
     font-weight: bold;
     font-size: 15px;
-}
-
-.info-isLive {
-    margin-top: 6px;
-    margin-right: 5px;
-    float: left;
-    height: 18px;
-    width: 45px;
-    background-color: #c10f0f;
-    border-radius: 10px;
-    font-size: 5px;
-    font-weight: 600;
-    text-align: center;
-    color: #F3F6F8;
-}
-
-.info-notLive {
-    margin-top: 6px;
-    margin-right: 5px;
-    float: left;
-    height: 18px;
-    width: 45px;
-    background-color: #979797;
-    border-radius: 10px;
-    font-size: 5px;
-    font-weight: 600;
-    text-align: center;
-    color: #F3F6F8;
-}
-
-.head-avatar {
-    border-radius: 10px;
-    height: 100%;
-    width: 100%;
 }
 </style>
    

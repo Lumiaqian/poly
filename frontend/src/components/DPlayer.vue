@@ -51,7 +51,7 @@ export default defineComponent({
             dp = new DPlayer({
                 container: document.getElementById('dplayer'),
                 lang: 'zh-cn',
-                autoplay: true,
+                autoplay: props.isLive ,
                 live: true,
                 screenshot: true,
                 airplay: true,
@@ -63,25 +63,21 @@ export default defineComponent({
                     pic: props.screenshot,
                     customType: {
                         customHls: (video: any, player: any) => {
-                            LogInfo(video);
-                            LogInfo(player);
                             const hls = new Hls();
                             hls.loadSource(video.src);
                             hls.attachMedia(video);
-                            player.events.on("destroy", () => {
+                            player.events.on('destroy', () => {
                                 hls.destroy();
                             });
                         },
                         customFlv: function (video: any, player: any) {
-                            LogInfo(video);
-                            LogInfo(player);
                             const flvPlayer = flvjs.createPlayer({
-                                type: "flv",
+                                type: 'flv',
                                 url: video.src,
                             });
                             flvPlayer.attachMediaElement(video);
                             flvPlayer.load();
-                            player.events.on("destroy", () => {
+                            player.events.on('destroy', () => {
                                 flvPlayer.unload();
                                 flvPlayer.detachMediaElement();
                                 flvPlayer.destroy();
