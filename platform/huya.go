@@ -1,8 +1,8 @@
 package platform
 
 import (
-	"changeme/codec"
 	"changeme/liveroom"
+	"changeme/pkg/codec"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -234,25 +234,25 @@ func (h *HuYa) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {
 		return roomInfo, err
 	}
 	//h.log.InfoFields("房间详情元数据", logger.Fields{"result": string(result)})
-	roomInfo.Anchor = matchRoomInfo(string(result), Nick)
-	roomInfo.Avatar = matchRoomInfo(string(result), Avatar)
+	roomInfo.Anchor = matchString(string(result), Nick)
+	roomInfo.Avatar = matchString(string(result), Avatar)
 	if roomInfo.Avatar != "" && !strings.Contains(roomInfo.Avatar, "https") {
 		roomInfo.Avatar = strings.ReplaceAll(roomInfo.Avatar, "http", "https")
 	}
-	roomInfo.GameFullName = matchRoomInfo(string(result), GameFullName)
-	roomInfo.Screenshot = matchRoomInfo(string(result), Screenshot)
+	roomInfo.GameFullName = matchString(string(result), GameFullName)
+	roomInfo.Screenshot = matchString(string(result), Screenshot)
 	if roomInfo.Screenshot != "" && !strings.Contains(roomInfo.Screenshot, "https") {
 		roomInfo.Screenshot = strings.ReplaceAll(roomInfo.Screenshot, "http", "https")
 	}
-	roomInfo.RoomName = matchRoomInfo(string(result), RoomName)
+	roomInfo.RoomName = matchString(string(result), RoomName)
 	if roomInfo.RoomName == "" {
-		roomInfo.RoomName = matchRoomInfo(string(result), Introduction)
+		roomInfo.RoomName = matchString(string(result), Introduction)
 	}
-	roomInfo.OnLineCount, err = strconv.Atoi(matchRoomInfo(string(result), ActivityCount))
+	roomInfo.OnLineCount, err = strconv.Atoi(matchString(string(result), ActivityCount))
 	if err != nil {
 		roomInfo.OnLineCount = 0
 	}
-	liveStatus := matchRoomInfo(string(result), LiveStatus)
+	liveStatus := matchString(string(result), LiveStatus)
 	h.log.InfoFields("直播状态", logger.Fields{"liveStatus": liveStatus})
 	switch liveStatus {
 	case "off":
@@ -270,7 +270,7 @@ func (h *HuYa) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {
 	return roomInfo, nil
 }
 
-func matchRoomInfo(res, regStr string) string {
+func matchString(res, regStr string) string {
 	reg := regexp.MustCompile(regStr)
 	match := reg.FindStringSubmatch(res)
 	if match == nil {

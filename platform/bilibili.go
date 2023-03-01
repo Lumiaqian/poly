@@ -2,13 +2,17 @@ package platform
 
 import (
 	"changeme/liveroom"
+	"changeme/pkg/request"
 	"context"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/guonaihong/gout"
 	"github.com/pkg/errors"
+	"github.com/samber/lo"
 	"github.com/tidwall/gjson"
 	"github.com/wailsapp/wails"
 	"github.com/wailsapp/wails/lib/logger"
@@ -41,7 +45,7 @@ const (
 func NewBilibili() Bilibili {
 	return Bilibili{
 		httpClient: http.Client{},
-		log:        logger.NewCustomLogger("bilibili"),
+		log:        logger.NewCustomLogger(Bili),
 	}
 }
 
@@ -169,36 +173,43 @@ func (b *Bilibili) HttpGet(url string) (string, error) {
 
 func (b *Bilibili) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {
 	roomInfo := liveroom.LiveRoomInfo{}
-	url := "https://api.live.bilibili.com/xlive/web-room/v1/index/" +
-		"getH5InfoByRoom?room_id=" + roomId
-	result, err := b.HttpGet(url)
+	var resp struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Data    struct {
+			RoomInfo struct {
+				Title      string `json:"title"`
+				OnLine     int    `json:"online"`
+				LiveStatus int    `json:"live_status"`
+				Cover      string `json:"cover"`
+			} `json:"room_info"`
+			AnchorInfo struct {
+				BaseInfo struct {
+					Uname    string `json:"uname"`
+					Face     string `json:"face"`
+					AreaName string `json:"area_name"`
+				} `json:"base_info"`
+			} `json:"anchor_info"`
+		} `json:"data"`
+	}
+	err := request.HTTP().GET(fmt.Sprintf("https://api.live.bilibili.com/xlive/web-room/v1/index/getH5InfoByRoom?room_id=%s", roomId)).
+		SetHeader(gout.H{"User-Agent": "Mozilla/5.0 (Linux; Android 5.0; SM-G900P Build/LRX21T) " +
+			"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Mobile Safari/537.36"}).
+		BindJSON(&resp).Do()
 	if err != nil {
 		return roomInfo, err
 	}
-	b.log.InfoFields("getH5InfoByRoom结果：", logger.Fields{"result": string(result)})
-	parse := gjson.Parse(string(result))
-	info := parse.Get("data.room_info")
-	anchorInfo := parse.Get("data.anchor_info.base_info")
-
-	roomInfo.Platform = Platform
-	roomInfo.PlatformName = liveroom.GetPlatform(roomInfo.Platform)
-	roomInfo.RoomId = roomId
-	roomInfo.RoomName = info.Get("title").String()
-	roomInfo.OnLineCount = int(info.Get("online").Int())
-	if int(info.Get("live_status").Int()) == 1 {
-		roomInfo.LiveStatus = 2
-	} else {
-		roomInfo.LiveStatus = 0
-	}
-	roomInfo.Screenshot = info.Get("cover").String()
-	if roomInfo.Screenshot != "" && !strings.Contains(roomInfo.Screenshot, "https") {
-		roomInfo.Screenshot = strings.ReplaceAll(roomInfo.Screenshot, "http", "https")
-	}
-	roomInfo.Anchor = anchorInfo.Get("uname").String()
-	roomInfo.Avatar = anchorInfo.Get("face").String()
-	if roomInfo.Avatar != "" && !strings.Contains(roomInfo.Avatar, "https") {
-		roomInfo.Avatar = strings.ReplaceAll(roomInfo.Avatar, "http", "https")
-	}
-	roomInfo.GameFullName = anchorInfo.Get("area_name").String()
-	return roomInfo, nil
+	b.log.InfoFields("getH5InfoByRoom结果：", logger.Fields{"result": resp})
+	return liveroom.LiveRoomInfo{
+		Platform:     Bili,
+		PlatformName: liveroom.GetPlatform(Bili),
+		RoomId:       roomId,
+		RoomName:     resp.Data.RoomInfo.Title,
+		Anchor:       resp.Data.AnchorInfo.BaseInfo.Uname,
+		Avatar:       lo.If(resp.Data.AnchorInfo.BaseInfo.Face != "" && !strings.Contains(resp.Data.AnchorInfo.BaseInfo.Face, "https"), strings.ReplaceAll(resp.Data.AnchorInfo.BaseInfo.Face, "http", "https")).Else(resp.Data.AnchorInfo.BaseInfo.Face),
+		OnLineCount:  resp.Data.RoomInfo.OnLine,
+		Screenshot:   lo.If(resp.Data.RoomInfo.Cover != "" && !strings.Contains(resp.Data.RoomInfo.Cover, "https"), strings.ReplaceAll(resp.Data.RoomInfo.Cover, "http", "https")).Else(resp.Data.RoomInfo.Cover),
+		GameFullName: resp.Data.AnchorInfo.BaseInfo.AreaName,
+		LiveStatus:   lo.If(resp.Data.RoomInfo.LiveStatus == 1, 2).Else(0),
+	}, nil
 }
