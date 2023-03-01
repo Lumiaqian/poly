@@ -17,6 +17,9 @@ type App struct {
 	ctx          context.Context
 	log          *wails.CustomLogger
 	focusService focus.FcousService
+	huya         platform.HuYa
+	douyu        platform.DouYu
+	bilibili     platform.Bilibili
 }
 
 // NewApp creates a new App application struct
@@ -30,6 +33,9 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.log = logger.NewCustomLogger("APP")
 	a.focusService = focus.NewFcousService()
+	a.douyu = platform.NewDoYu()
+	a.huya = platform.NewHuYa()
+	a.bilibili = platform.NewBilibili()
 }
 
 // domReady is called after front-end resources have been loaded
@@ -60,8 +66,7 @@ func (a *App) GetLiveRoom(platformName, roomId string) liveroom.LiveRoom {
 	room := liveroom.LiveRoom{}
 	switch platformName {
 	case platform.Huya:
-		huya := platform.NewHuYa()
-		room, err := huya.GetLiveUrl(a.ctx, roomId)
+		room, err := a.huya.GetLiveUrl(a.ctx, roomId)
 		if err != nil {
 			a.log.InfoFields("huya.GetLiveUrl", logger.Fields{"error": err})
 			return liveroom.LiveRoom{}
@@ -69,8 +74,7 @@ func (a *App) GetLiveRoom(platformName, roomId string) liveroom.LiveRoom {
 		a.log.InfoFields("huya.GetLiveUrl", logger.Fields{"room": room})
 		return *room
 	case platform.Bili:
-		bilibili := platform.NewBilibili()
-		room, err := bilibili.GetLiveUrl(a.ctx, roomId)
+		room, err := a.bilibili.GetLiveUrl(a.ctx, roomId)
 		if err != nil {
 			a.log.InfoFields("bilibili.GetLiveUrl", logger.Fields{"error": err})
 			return liveroom.LiveRoom{}
@@ -78,8 +82,7 @@ func (a *App) GetLiveRoom(platformName, roomId string) liveroom.LiveRoom {
 		a.log.InfoFields("bilibili.GetLiveUrl", logger.Fields{"room": room})
 		return *room
 	case platform.Douyu:
-		douyu := platform.NewDoYu()
-		room, err := douyu.GetLiveUrl(a.ctx, roomId)
+		room, err := a.douyu.GetLiveUrl(a.ctx, roomId)
 		if err != nil {
 			a.log.InfoFields("douyu.GetLiveUrl", logger.Fields{"error": err})
 			return liveroom.LiveRoom{}
@@ -116,24 +119,21 @@ func (a *App) GetLiveRoomInfo(platformName, roomId string) liveroom.LiveRoomInfo
 	a.log.InfoFields("GetLiveRoomInfo", logger.Fields{"platformName": platformName})
 	switch platformName {
 	case platform.Huya:
-		huya := platform.NewHuYa()
-		roomInfo, err := huya.GetRoomInfo(roomId)
+		roomInfo, err := a.huya.GetRoomInfo(roomId)
 		if err != nil {
 			a.log.ErrorFields("huya.GetRoomInfo Err", logger.Fields{"error": err})
 			return roomInfo
 		}
 		return roomInfo
 	case platform.Bili:
-		bilibili := platform.NewBilibili()
-		roomInfo, err := bilibili.GetRoomInfo(roomId)
+		roomInfo, err := a.bilibili.GetRoomInfo(roomId)
 		if err != nil {
 			a.log.ErrorFields("bilibili.GetRoomInfo Err", logger.Fields{"error": err})
 			return roomInfo
 		}
 		return roomInfo
 	case platform.Douyu:
-		douyu := platform.NewDoYu()
-		roomInfo, err := douyu.GetRoomInfo(roomId)
+		roomInfo, err := a.douyu.GetRoomInfo(roomId)
 		if err != nil {
 			a.log.ErrorFields("douyu.GetRoomInfo Err", logger.Fields{"error": err})
 			return roomInfo

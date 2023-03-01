@@ -26,3 +26,19 @@ func TestGetRoomInfo(t *testing.T) {
 	}
 	t.Logf("liveRoomInfo:%+v", liveRoomInfo)
 }
+
+func TestGetSimgleArea(t *testing.T) {
+	list, err := huya.GetSimgleArea("1", "网游竞技")
+	if err != nil {
+		t.Error(err)
+	}
+	t.Logf("list:%+v", list)
+}
+
+func TestGetAllArea(t *testing.T) {
+	list, err := huya.GetAllAreaInfo()
+	if err != nil {
+		t.Error(err)
+	}
+	t.Logf("list:%+v", list)
+}

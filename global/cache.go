@@ -7,6 +7,6 @@ import (
 
 var Cache = cache.Init()
 
-func RoomInfoKey(biz string, keys ...string) string {
+func FormatKey(biz string, keys ...string) string {
 	return biz + ":" + strings.Join(keys, ":")
 }
