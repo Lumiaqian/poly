@@ -1,14 +1,22 @@
 package focus
 
 import (
+	"changeme/global"
 	"changeme/liveroom"
 	"changeme/platform"
 	"io/ioutil"
 	"sort"
+	"sync"
+	"time"
 
+	"github.com/patrickmn/go-cache"
 	"github.com/wailsapp/wails"
 	"github.com/wailsapp/wails/lib/logger"
 	"gopkg.in/yaml.v3"
+)
+
+const (
+	FcousName = "Fcous"
 )
 
 type FcousList struct {
@@ -24,9 +32,12 @@ type Item struct {
 type FcousService struct {
 	huya      platform.HuYa
 	bilibili  platform.Bilibili
+	douyu     platform.DouYu
 	log       *wails.CustomLogger
 	fcousList FcousList
 	roomList  []liveroom.LiveRoomInfo
+	cache     cache.Cache
+	wg        sync.WaitGroup
 }
 
 func NewFcousService() FcousService {
@@ -34,9 +45,12 @@ func NewFcousService() FcousService {
 	return FcousService{
 		huya:      platform.NewHuYa(),
 		bilibili:  platform.NewBilibili(),
+		douyu:     platform.NewDoYu(),
 		log:       log,
 		fcousList: FcousList{},
 		roomList:  []liveroom.LiveRoomInfo{},
+		cache:     *global.Cache,
+		wg:        sync.WaitGroup{},
 	}
 }
 
@@ -62,24 +76,54 @@ func (f *FcousService) GetFcousRoomInfo() []liveroom.LiveRoomInfo {
 
 func (f *FcousService) getFcousRoomInfo() []liveroom.LiveRoomInfo {
 	f.roomList = f.roomList[0:0]
+
+	ch := make(chan *liveroom.LiveRoomInfo)
+	f.wg.Add(len(f.fcousList.Fcous))
 	for _, fcous := range f.fcousList.Fcous {
-		switch fcous.Platform {
-		case "huya":
-			roomInfo, err := f.huya.GetRoomInfo(fcous.RoomId)
-			if err != nil {
-				f.log.ErrorFields("GetRoomInfo Huya Err", logger.Fields{"err": err})
-				continue
-			}
-			f.roomList = append(f.roomList, roomInfo)
-		case "bilibili":
-			roomInfo, err := f.bilibili.GetRoomInfo(fcous.RoomId)
-			if err != nil {
-				f.log.ErrorFields("GetRoomInfo Bilibili Err", logger.Fields{"err": err})
-				continue
-			}
-			f.roomList = append(f.roomList, roomInfo)
-		}
+		go f.getRoomInfo(fcous, ch)
+	}
+
+	go func() {
+		f.wg.Wait()
+		close(ch)
+	}()
+	for info := range ch {
+		f.roomList = append(f.roomList, *info)
 	}
 	sort.Sort(liveroom.LiveRoomInfoArray(f.roomList))
 	return f.roomList
+}
+
+func (f *FcousService) getRoomInfo(fcous Item, ch chan *liveroom.LiveRoomInfo) {
+	defer f.wg.Done()
+	if roomInfo, ok := global.Cache.Get(global.RoomInfoKey(FcousName, fcous.Platform, fcous.RoomId)); ok {
+		ch <- roomInfo.(*liveroom.LiveRoomInfo)
+		return
+	}
+	switch fcous.Platform {
+	case platform.Huya:
+		roomInfo, err := f.huya.GetRoomInfo(fcous.RoomId)
+		if err != nil {
+			f.log.ErrorFields("GetRoomInfo Huya Err", logger.Fields{"err": err})
+			return
+		}
+		global.Cache.Set(global.RoomInfoKey(FcousName, fcous.Platform, fcous.RoomId), &roomInfo, 3*time.Minute)
+		ch <- &roomInfo
+	case platform.Bili:
+		roomInfo, err := f.bilibili.GetRoomInfo(fcous.RoomId)
+		if err != nil {
+			f.log.ErrorFields("GetRoomInfo Bilibili Err", logger.Fields{"err": err})
+			return
+		}
+		global.Cache.Set(global.RoomInfoKey(FcousName, fcous.Platform, fcous.RoomId), &roomInfo, 3*time.Minute)
+		ch <- &roomInfo
+	case platform.Douyu:
+		roomInfo, err := f.douyu.GetRoomInfo(fcous.RoomId)
+		if err != nil {
+			f.log.ErrorFields("GetRoomInfo douyu Err", logger.Fields{"err": err})
+			return
+		}
+		global.Cache.Set(global.RoomInfoKey(FcousName, fcous.Platform, fcous.RoomId), &roomInfo, 3*time.Minute)
+		ch <- &roomInfo
+	}
 }

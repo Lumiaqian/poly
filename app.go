@@ -77,6 +77,15 @@ func (a *App) GetLiveRoom(platformName, roomId string) liveroom.LiveRoom {
 		}
 		a.log.InfoFields("bilibili.GetLiveUrl", logger.Fields{"room": room})
 		return *room
+	case platform.Douyu:
+		douyu := platform.NewDoYu()
+		room, err := douyu.GetLiveUrl(a.ctx, roomId)
+		if err != nil {
+			a.log.InfoFields("douyu.GetLiveUrl", logger.Fields{"error": err})
+			return liveroom.LiveRoom{}
+		}
+		a.log.InfoFields("douyu.GetLiveUrl", logger.Fields{"room": room})
+		return *room
 	}
 	return room
 }
@@ -119,6 +128,14 @@ func (a *App) GetLiveRoomInfo(platformName, roomId string) liveroom.LiveRoomInfo
 		roomInfo, err := bilibili.GetRoomInfo(roomId)
 		if err != nil {
 			a.log.ErrorFields("bilibili.GetRoomInfo Err", logger.Fields{"error": err})
+			return roomInfo
+		}
+		return roomInfo
+	case platform.Douyu:
+		douyu := platform.NewDoYu()
+		roomInfo, err := douyu.GetRoomInfo(roomId)
+		if err != nil {
+			a.log.ErrorFields("douyu.GetRoomInfo Err", logger.Fields{"error": err})
 			return roomInfo
 		}
 		return roomInfo
