@@ -41,3 +41,11 @@ func TestGetAllArea(t *testing.T) {
 	}
 	t.Logf("list:%+v", list)
 }
+
+func TestHuyaGetRecommend(t *testing.T) {
+	list, err := huya.GetRecommend(2, 12)
+	if err != nil {
+		t.Error(err)
+	}
+	t.Logf("list:%+v", list)
+}
