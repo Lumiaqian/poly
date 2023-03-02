@@ -17,3 +17,11 @@ func TestGetBilibiliLiveRoomInfo(t *testing.T) {
 	}
 	t.Logf("info:%+v", info)
 }
+
+func TestBiliGetRecommend(t *testing.T) {
+	list, err := bilibili.GetRecommend(1, 12)
+	if err != nil {
+		t.Error(err)
+	}
+	t.Logf("list:%+v", list)
+}

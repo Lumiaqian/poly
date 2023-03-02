@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"changeme/internal/global"
 	"changeme/internal/liveroom"
 	"changeme/pkg/request"
 	"crypto/md5"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/dop251/goja"
 	"github.com/guonaihong/gout"
+	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"github.com/wailsapp/wails"
@@ -34,12 +36,14 @@ const (
 type DouYu struct {
 	httpClient http.Client
 	log        *wails.CustomLogger
+	cache      cache.Cache
 }
 
 func NewDoYu() DouYu {
 	return DouYu{
 		httpClient: http.Client{},
 		log:        logger.NewCustomLogger(Douyu),
+		cache:      *global.Cache,
 	}
 }
 
@@ -175,4 +179,58 @@ func (d *DouYu) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {
 		GameFullName: info.Data.CateName,
 		LiveStatus:   lo.If(info.Data.RoomStatus == "1", 2).Else(0),
 	}, nil
+}
+
+// 斗鱼获取推荐信息
+func (d *DouYu) GetRecommend(page, pageSize int) ([]liveroom.LiveRoomInfo, error) {
+	if list, ok := global.Cache.Get(global.FormatKey(liveroom.RecommendKey, Douyu, strconv.Itoa(page), strconv.Itoa(pageSize))); ok {
+		return list.([]liveroom.LiveRoomInfo), nil
+	}
+	start := pageSize*(page-1)/8 + lo.If(pageSize*(page-1)/8 == 0, 0).Else(1)
+	start = lo.If(start == 0, 1).Else(start)
+	startIndex := pageSize * (page - 1) % 8
+	end := pageSize*page/8 + lo.If(pageSize*page%8 == 0, 0).Else(1)
+	endIndex := pageSize * page % 8
+
+	roomInfos := []liveroom.LiveRoomInfo{}
+
+	d.log.InfoFields("End", logger.Fields{"End": end})
+
+	for i := start; i <= end; i++ {
+
+		var resp struct {
+			Code int `json:"code"`
+			Data struct {
+				List []struct {
+					RoomId     int    `json:"rid"`      //房间ID
+					RoomName   string `json:"roomName"` //房间名称
+					Anchor     string `json:"nickname"` //主播
+					Avatar     string `json:"avatar"`   //头像
+					Screenshot string `json:"roomSrc"`  //房间封面图
+				} `json:"list"`
+			} `json:"data"`
+		}
+		err := request.HTTP().GET(fmt.Sprintf("https://m.douyu.com/api/room/list?page=%d&type=", i)).
+			BindJSON(&resp).Do()
+		if err != nil {
+			d.log.Error(err.Error())
+			return nil, err
+		}
+		list := []liveroom.LiveRoomInfo{}
+		if resp.Code == 0 {
+			for _, res := range resp.Data.List {
+				room, err := d.GetRoomInfo(strconv.Itoa(res.RoomId))
+				if err != nil {
+					d.log.Error(err.Error())
+					return nil, err
+				}
+				list = append(list, room)
+			}
+			roomInfos = append(roomInfos, list...)
+		}
+	}
+	d.log.InfoFields("roomInfos", logger.Fields{"roomInfos length": len(roomInfos)})
+	roomInfos = roomInfos[startIndex : len(roomInfos)-endIndex]
+	global.Cache.Set(global.FormatKey(liveroom.RecommendKey, Douyu, strconv.Itoa(page), strconv.Itoa(pageSize)), roomInfos, 10*time.Minute)
+	return roomInfos, nil
 }

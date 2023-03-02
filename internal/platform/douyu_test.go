@@ -21,3 +21,11 @@ func TestGetDouyuRoomInfo(t *testing.T) {
 	}
 	t.Logf("roomInfo:%+v", roomInfo)
 }
+
+func TestDouyuGetRecommend(t *testing.T) {
+	list, err := douyu.GetRecommend(2, 12)
+	if err != nil {
+		t.Error(err)
+	}
+	t.Logf("list:%+v", list)
+}

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/guonaihong/gout"
 	"github.com/pkg/errors"
@@ -181,12 +182,12 @@ func (b *Bilibili) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {
 				OnLine     int    `json:"online"`
 				LiveStatus int    `json:"live_status"`
 				Cover      string `json:"cover"`
+				AreaName   string `json:"area_name"`
 			} `json:"room_info"`
 			AnchorInfo struct {
 				BaseInfo struct {
-					Uname    string `json:"uname"`
-					Face     string `json:"face"`
-					AreaName string `json:"area_name"`
+					Uname string `json:"uname"`
+					Face  string `json:"face"`
 				} `json:"base_info"`
 			} `json:"anchor_info"`
 		} `json:"data"`
@@ -208,7 +209,65 @@ func (b *Bilibili) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {
 		Avatar:       lo.If(resp.Data.AnchorInfo.BaseInfo.Face != "" && !strings.Contains(resp.Data.AnchorInfo.BaseInfo.Face, "https"), strings.ReplaceAll(resp.Data.AnchorInfo.BaseInfo.Face, "http", "https")).Else(resp.Data.AnchorInfo.BaseInfo.Face),
 		OnLineCount:  resp.Data.RoomInfo.OnLine,
 		Screenshot:   lo.If(resp.Data.RoomInfo.Cover != "" && !strings.Contains(resp.Data.RoomInfo.Cover, "https"), strings.ReplaceAll(resp.Data.RoomInfo.Cover, "http", "https")).Else(resp.Data.RoomInfo.Cover),
-		GameFullName: resp.Data.AnchorInfo.BaseInfo.AreaName,
+		GameFullName: resp.Data.RoomInfo.AreaName,
 		LiveStatus:   lo.If(resp.Data.RoomInfo.LiveStatus == 1, 2).Else(0),
 	}, nil
+}
+
+// 获取哔哩哔哩推荐
+func (b *Bilibili) GetRecommend(page, pageSize int) ([]liveroom.LiveRoomInfo, error) {
+	var resp struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Data    []struct {
+			RoomId   int    `json:"roomId"`
+			Area     int    `json:"area"`
+			Title    string `json:"title"`
+			OnLine   int    `json:"online"`
+			Cover    string `json:"system_cover"`
+			Uname    string `json:"uname"`
+			Face     string `json:"face"`
+			AreaName string `json:"area_name"`
+		} `json:"data"`
+	}
+	err := request.HTTP().GET(fmt.Sprintf("https://api.live.bilibili.com/room/v1/room/get_user_recommend?page=%d&page_size=%d", page, pageSize)).
+		BindJSON(&resp).Do()
+	if err != nil {
+		return nil, err
+	}
+	b.log.InfoFields("roomInfos", logger.Fields{"roomInfos": resp})
+	roomInfos := make([]liveroom.LiveRoomInfo, 0, pageSize)
+	if resp.Code == 0 {
+		wg := sync.WaitGroup{}
+		ch := make(chan *liveroom.LiveRoomInfo)
+		wg.Add(len(resp.Data))
+		for _, res := range resp.Data {
+			go func(res struct {
+				RoomId   int    `json:"roomId"`
+				Area     int    `json:"area"`
+				Title    string `json:"title"`
+				OnLine   int    `json:"online"`
+				Cover    string `json:"system_cover"`
+				Uname    string `json:"uname"`
+				Face     string `json:"face"`
+				AreaName string `json:"area_name"`
+			}) {
+				defer wg.Done()
+				room, err := b.GetRoomInfo(strconv.Itoa(res.RoomId))
+				if err != nil {
+					b.log.Error(err.Error())
+					return
+				}
+				ch <- &room
+			}(res)
+		}
+		go func() {
+			wg.Wait()
+			close(ch)
+		}()
+		for info := range ch {
+			roomInfos = append(roomInfos, *info)
+		}
+	}
+	return roomInfos, nil
 }

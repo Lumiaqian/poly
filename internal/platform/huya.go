@@ -18,6 +18,7 @@ import (
 	"github.com/guonaihong/gout"
 	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
+	"github.com/samber/lo"
 	"github.com/tidwall/gjson"
 	"github.com/wailsapp/wails"
 	"github.com/wailsapp/wails/lib/logger"
@@ -347,4 +348,59 @@ func (h *HuYa) GetAllAreaInfo() ([]liveroom.AreaInfo, error) {
 		return infos.([]liveroom.AreaInfo), nil
 	}
 	return h.InitAreaCache(), nil
+}
+
+// 获取虎牙推荐
+func (h *HuYa) GetRecommend(page, pageSize int) ([]liveroom.LiveRoomInfo, error) {
+	realPage := page/6 + 1
+	start := (page - 1) * pageSize % 120
+	if pageSize == 10 {
+		realPage = page/12 + 1
+		start = (page - 1) * pageSize % 120
+	}
+	var resp struct {
+		Status int `json:"status"`
+		Data   struct {
+			Datas []struct {
+				ProfileRomm  string `json:"profileRo0m"`
+				Gid          string `json:"gid"`
+				GameFullName string `json:"gameFullName"`
+				RoomName     string `json:"roomName"`
+				Nick         string `json:"nick"`
+				Screenshot   string `json:"screenshot"`
+				Avatar       string `json:"avart180"`
+				TatalCount   string `json:"totalCount"`
+			} `json:"datas"`
+		} `json:"data"`
+	}
+	//var resp string
+	err := request.HTTP().GET(fmt.Sprintf("https://www.huya.com/cache.php?m=LiveList&do=getLiveListByPage&tagAll=0&page=%d", realPage)).
+		BindJSON(&resp).Do()
+	if err != nil {
+		return nil, err
+	}
+	h.log.InfoFields("roomInfos", logger.Fields{"roomInfos": resp, "start": start})
+	roomInfos := make([]liveroom.LiveRoomInfo, 0, start+pageSize)
+	if resp.Status == 200 {
+		for i := start; i < start+pageSize; i++ {
+			count, err := strconv.Atoi(resp.Data.Datas[i].TatalCount)
+			if err != nil {
+				h.log.InfoFields("GetRoomInfo Count Err", logger.Fields{"count": count})
+				break
+			}
+			roomInfos = append(roomInfos, liveroom.LiveRoomInfo{
+				Platform:     Huya,
+				PlatformName: liveroom.GetPlatform(Huya),
+				RoomId:       resp.Data.Datas[i].ProfileRomm,
+				RoomName:     resp.Data.Datas[i].RoomName,
+				Anchor:       resp.Data.Datas[i].Nick,
+				Avatar:       lo.If(resp.Data.Datas[i].Avatar != "" && !strings.Contains(resp.Data.Datas[i].Avatar, "https"), strings.ReplaceAll(resp.Data.Datas[i].Avatar, "http", "https")).Else(resp.Data.Datas[i].Avatar),
+				OnLineCount:  count,
+				Screenshot:   lo.If(resp.Data.Datas[i].Screenshot != "" && !strings.Contains(resp.Data.Datas[i].Screenshot, "https"), strings.ReplaceAll(resp.Data.Datas[i].Screenshot, "http", "https")).Else(resp.Data.Datas[i].Screenshot),
+				GameFullName: resp.Data.Datas[i].GameFullName,
+				LiveStatus:   2,
+			})
+		}
+	}
+	return roomInfos, nil
 }

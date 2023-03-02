@@ -114,3 +114,9 @@ func (a *Server) GetLiveRoomInfo(platformName, roomId string) liveroom.LiveRoomI
 func (a *Server) GetFocus() []liveroom.LiveRoomInfo {
 	return a.focusService.GetFcousRoomInfo()
 }
+
+// 获取All推荐列表
+func (a *Server) GetRecommend(page, pageSize int) []liveroom.LiveRoomInfo {
+
+	return nil
+}

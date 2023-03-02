@@ -17,3 +17,7 @@ export function GetLiveRoom(arg1, arg2) {
 export function GetLiveRoomInfo(arg1, arg2) {
   return window['go']['app']['Server']['GetLiveRoomInfo'](arg1, arg2);
 }
+
+export function GetRecommend(arg1, arg2) {
+  return window['go']['app']['Server']['GetRecommend'](arg1, arg2);
+}

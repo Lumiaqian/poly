@@ -2,6 +2,7 @@ package liveroom
 
 const (
 	AreaInfosKey = "AreaInfos"
+	RecommendKey = "RecommendList"
 )
 
 type LiveRoom struct {
