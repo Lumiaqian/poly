@@ -9,3 +9,5 @@ export function GetFocus():Promise<Array<liveroom.LiveRoomInfo>>;
 export function GetLiveRoom(arg1:string,arg2:string):Promise<liveroom.LiveRoom>;
 
 export function GetLiveRoomInfo(arg1:string,arg2:string):Promise<liveroom.LiveRoomInfo>;
+
+export function GetRecommend(arg1:number,arg2:number):Promise<Array<liveroom.LiveRoomInfo>>;
