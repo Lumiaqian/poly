@@ -1,9 +1,9 @@
 package main
 
 import (
-	"changeme/focus"
-	"changeme/liveroom"
-	"changeme/platform"
+	"changeme/internal/focus"
+	"changeme/internal/liveroom"
+	"changeme/internal/platform"
 	"context"
 	"fmt"
 
@@ -66,7 +66,7 @@ func (a *App) GetLiveRoom(platformName, roomId string) liveroom.LiveRoom {
 	room := liveroom.LiveRoom{}
 	switch platformName {
 	case platform.Huya:
-		room, err := a.huya.GetLiveUrl(a.ctx, roomId)
+		room, err := a.huya.GetLiveUrl(roomId)
 		if err != nil {
 			a.log.InfoFields("huya.GetLiveUrl", logger.Fields{"error": err})
 			return liveroom.LiveRoom{}
@@ -74,7 +74,7 @@ func (a *App) GetLiveRoom(platformName, roomId string) liveroom.LiveRoom {
 		a.log.InfoFields("huya.GetLiveUrl", logger.Fields{"room": room})
 		return *room
 	case platform.Bili:
-		room, err := a.bilibili.GetLiveUrl(a.ctx, roomId)
+		room, err := a.bilibili.GetLiveUrl(roomId)
 		if err != nil {
 			a.log.InfoFields("bilibili.GetLiveUrl", logger.Fields{"error": err})
 			return liveroom.LiveRoom{}
@@ -82,7 +82,7 @@ func (a *App) GetLiveRoom(platformName, roomId string) liveroom.LiveRoom {
 		a.log.InfoFields("bilibili.GetLiveUrl", logger.Fields{"room": room})
 		return *room
 	case platform.Douyu:
-		room, err := a.douyu.GetLiveUrl(a.ctx, roomId)
+		room, err := a.douyu.GetLiveUrl(roomId)
 		if err != nil {
 			a.log.InfoFields("douyu.GetLiveUrl", logger.Fields{"error": err})
 			return liveroom.LiveRoom{}
