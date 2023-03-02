@@ -1,7 +1,6 @@
 package platform
 
 import (
-	"context"
 	"testing"
 )
 
@@ -12,7 +11,7 @@ func TestGetStreamInfo(t *testing.T) {
 }
 
 func TestGetLiveUrl(t *testing.T) {
-	liveroom, err := huya.GetLiveUrl(context.Background(), "222523")
+	liveroom, err := huya.GetLiveUrl("222523")
 	if err != nil {
 		t.Fail()
 	}
@@ -25,4 +24,20 @@ func TestGetRoomInfo(t *testing.T) {
 		t.Fail()
 	}
 	t.Logf("liveRoomInfo:%+v", liveRoomInfo)
+}
+
+func TestGetSimgleArea(t *testing.T) {
+	list, err := huya.GetSimgleArea("1", "网游竞技")
+	if err != nil {
+		t.Error(err)
+	}
+	t.Logf("list:%+v", list)
+}
+
+func TestGetAllArea(t *testing.T) {
+	list, err := huya.GetAllAreaInfo()
+	if err != nil {
+		t.Error(err)
+	}
+	t.Logf("list:%+v", list)
 }

@@ -1,14 +1,13 @@
 package platform
 
 import (
-	"context"
 	"testing"
 )
 
 var douyu = NewDoYu()
 
 func TestGetDouyuLiveUrl(t *testing.T) {
-	liveUrl, err := douyu.GetLiveUrl(context.TODO(), "687423")
+	liveUrl, err := douyu.GetLiveUrl("687423")
 	if err != nil {
 		t.Fail()
 	}

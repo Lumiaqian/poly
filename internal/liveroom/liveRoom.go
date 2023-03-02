@@ -1,5 +1,9 @@
 package liveroom
 
+const (
+	AreaInfosKey = "AreaInfos"
+)
+
 type LiveRoom struct {
 	Platform     string    `json:"platform"`     //直播平台
 	PlatformName string    `json:"platformName"` //直播平台名称
@@ -58,6 +62,17 @@ func GetPlatform(platform string) string {
 		str = "哔哩哔哩"
 	}
 	return str
+}
+
+// 分区详情
+type AreaInfo struct {
+	Platform  string `json:"platform"`
+	AreaId    string `json:"areaId"`
+	AreaName  string `json:"areaName"`
+	AreaPic   string `json:"areaPic"`
+	ShortName string `json:"shortName"`
+	TypeName  string `json:"typeName"`
+	AreaType  string `json:"areaType"`
 }
 
 type LiveRoomInfoArray []LiveRoomInfo

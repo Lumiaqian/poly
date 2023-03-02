@@ -1,14 +1,13 @@
 package platform
 
 import (
-	"context"
 	"testing"
 )
 
 var bilibili = NewBilibili()
 
 func TestGetBilibiliLiveUrl(t *testing.T) {
-	bilibili.GetLiveUrl(context.TODO(), "7777")
+	bilibili.GetLiveUrl("7777")
 }
 
 func TestGetBilibiliLiveRoomInfo(t *testing.T) {

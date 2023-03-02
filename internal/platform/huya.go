@@ -1,9 +1,10 @@
 package platform
 
 import (
-	"changeme/liveroom"
+	"changeme/internal/global"
+	"changeme/internal/liveroom"
 	"changeme/pkg/codec"
-	"context"
+	"changeme/pkg/request"
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
@@ -14,6 +15,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/guonaihong/gout"
+	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 	"github.com/tidwall/gjson"
 	"github.com/wailsapp/wails"
@@ -23,6 +26,7 @@ import (
 type HuYa struct {
 	httpClient http.Client
 	log        *wails.CustomLogger
+	cache      cache.Cache
 }
 
 const (
@@ -36,16 +40,27 @@ const (
 	LiveStatus    = `\"liveStatus-(.*?)\"`
 )
 
-func NewHuYa() HuYa {
-	x := logger.NewCustomLogger("huya")
-	return HuYa{
-		httpClient: http.Client{Timeout: time.Second * 5},
-		log:        x,
+var (
+	HuyaTopAreaMap = map[string]string{
+		"1": "网游竞技",
+		"2": "单机热游",
+		"3": "手游休闲",
+		"8": "娱乐天地",
 	}
+)
+
+func NewHuYa() HuYa {
+	huya := HuYa{
+		httpClient: http.Client{Timeout: time.Second * 5},
+		log:        logger.NewCustomLogger("huya"),
+		cache:      *global.Cache,
+	}
+	huya.InitAreaCache()
+	return huya
 }
 
 // 获取真实直播流
-func (h *HuYa) GetLiveUrl(ctx context.Context, roomId string) (*liveroom.LiveRoom, error) {
+func (h *HuYa) GetLiveUrl(roomId string) (*liveroom.LiveRoom, error) {
 	roomUrl := "https://m.huya.com/" + roomId
 	request, err := http.NewRequest("GET", roomUrl, nil)
 	if err != nil {
@@ -277,4 +292,59 @@ func matchString(res, regStr string) string {
 		return ""
 	}
 	return match[1]
+}
+
+// 初始化分区
+func (h *HuYa) InitAreaCache() []liveroom.AreaInfo {
+	areaInfos := []liveroom.AreaInfo{}
+	for key, val := range HuyaTopAreaMap {
+		infos, err := h.GetSimgleArea(key, val)
+		if err != nil {
+			break
+		}
+		areaInfos = append(areaInfos, infos...)
+	}
+	h.cache.Set(global.FormatKey(liveroom.AreaInfosKey, Huya), areaInfos, 30*time.Minute)
+	return areaInfos
+}
+
+// 获取单个分区
+func (h *HuYa) GetSimgleArea(areaCode, typeName string) ([]liveroom.AreaInfo, error) {
+	areaInfos := []liveroom.AreaInfo{}
+	var resp struct {
+		GameList []struct {
+			Gid          int    `json:"gid"`
+			GameFullName string `json:"gameFullName"`
+		} `json:"gameList"`
+	}
+	//var resp string
+	err := request.HTTP().GET(fmt.Sprintf("https://m.huya.com/cache.php?m=Game&do=ajaxGameList&bussType=%s", areaCode)).
+		SetHeader(gout.H{
+			"User-Agent":   "Mozilla/5.0 (Linux; Android 5.0; SM-G900P Build/LRX21T) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Mobile Safari/537.36",
+			"Content-Type": "application/x-www-form-urlencoded",
+		}).BindJSON(&resp).Do()
+	if err != nil {
+		return nil, err
+	}
+	h.log.InfoFields("areaInfos", logger.Fields{"areaInfos": resp})
+	for _, game := range resp.GameList {
+		areaInfos = append(areaInfos, liveroom.AreaInfo{
+			Platform:  Huya,
+			AreaId:    strconv.Itoa(game.Gid),
+			AreaName:  game.GameFullName,
+			AreaPic:   "https://huyaimg.msstatic.com/cdnimage/game/" + strconv.Itoa(game.Gid) + "-MS.jpg",
+			ShortName: "",
+			TypeName:  typeName,
+			AreaType:  areaCode,
+		})
+	}
+	return areaInfos, nil
+}
+
+// 获取所有分区信息
+func (h *HuYa) GetAllAreaInfo() ([]liveroom.AreaInfo, error) {
+	if infos, ok := h.cache.Get(global.FormatKey(liveroom.AreaInfosKey, Huya)); ok {
+		return infos.([]liveroom.AreaInfo), nil
+	}
+	return h.InitAreaCache(), nil
 }

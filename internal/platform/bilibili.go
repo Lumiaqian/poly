@@ -1,9 +1,8 @@
 package platform
 
 import (
-	"changeme/liveroom"
+	"changeme/internal/liveroom"
 	"changeme/pkg/request"
-	"context"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -50,7 +49,7 @@ func NewBilibili() Bilibili {
 }
 
 // 获取哔哩哔哩直播的真实流媒体地址，默认获取直播间提供的最高画质
-func (b *Bilibili) GetLiveUrl(ctx context.Context, roomId string) (*liveroom.LiveRoom, error) {
+func (b *Bilibili) GetLiveUrl(roomId string) (*liveroom.LiveRoom, error) {
 	//先获取直播状态和真实房间号
 	roomInit, err := b.getRealRid(roomId)
 	if err != nil {

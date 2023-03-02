@@ -1,9 +1,9 @@
 package focus
 
 import (
-	"changeme/global"
-	"changeme/liveroom"
-	"changeme/platform"
+	"changeme/internal/global"
+	"changeme/internal/liveroom"
+	"changeme/internal/platform"
 	"io/ioutil"
 	"sort"
 	"sync"
@@ -96,7 +96,7 @@ func (f *FcousService) getFcousRoomInfo() []liveroom.LiveRoomInfo {
 
 func (f *FcousService) getRoomInfo(fcous Item, ch chan *liveroom.LiveRoomInfo) {
 	defer f.wg.Done()
-	if roomInfo, ok := global.Cache.Get(global.RoomInfoKey(FcousName, fcous.Platform, fcous.RoomId)); ok {
+	if roomInfo, ok := global.Cache.Get(global.FormatKey(FcousName, fcous.Platform, fcous.RoomId)); ok {
 		ch <- roomInfo.(*liveroom.LiveRoomInfo)
 		return
 	}
@@ -107,7 +107,7 @@ func (f *FcousService) getRoomInfo(fcous Item, ch chan *liveroom.LiveRoomInfo) {
 			f.log.ErrorFields("GetRoomInfo Huya Err", logger.Fields{"err": err})
 			return
 		}
-		global.Cache.Set(global.RoomInfoKey(FcousName, fcous.Platform, fcous.RoomId), &roomInfo, 3*time.Minute)
+		global.Cache.Set(global.FormatKey(FcousName, fcous.Platform, fcous.RoomId), &roomInfo, 3*time.Minute)
 		ch <- &roomInfo
 	case platform.Bili:
 		roomInfo, err := f.bilibili.GetRoomInfo(fcous.RoomId)
@@ -115,7 +115,7 @@ func (f *FcousService) getRoomInfo(fcous Item, ch chan *liveroom.LiveRoomInfo) {
 			f.log.ErrorFields("GetRoomInfo Bilibili Err", logger.Fields{"err": err})
 			return
 		}
-		global.Cache.Set(global.RoomInfoKey(FcousName, fcous.Platform, fcous.RoomId), &roomInfo, 3*time.Minute)
+		global.Cache.Set(global.FormatKey(FcousName, fcous.Platform, fcous.RoomId), &roomInfo, 3*time.Minute)
 		ch <- &roomInfo
 	case platform.Douyu:
 		roomInfo, err := f.douyu.GetRoomInfo(fcous.RoomId)
@@ -123,7 +123,7 @@ func (f *FcousService) getRoomInfo(fcous Item, ch chan *liveroom.LiveRoomInfo) {
 			f.log.ErrorFields("GetRoomInfo douyu Err", logger.Fields{"err": err})
 			return
 		}
-		global.Cache.Set(global.RoomInfoKey(FcousName, fcous.Platform, fcous.RoomId), &roomInfo, 3*time.Minute)
+		global.Cache.Set(global.FormatKey(FcousName, fcous.Platform, fcous.RoomId), &roomInfo, 3*time.Minute)
 		ch <- &roomInfo
 	}
 }

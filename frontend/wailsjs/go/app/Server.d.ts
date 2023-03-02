@@ -9,11 +9,3 @@ export function GetFocus():Promise<Array<liveroom.LiveRoomInfo>>;
 export function GetLiveRoom(arg1:string,arg2:string):Promise<liveroom.LiveRoom>;
 
 export function GetLiveRoomInfo(arg1:string,arg2:string):Promise<liveroom.LiveRoomInfo>;
-
-export function Greet(arg1:string):Promise<string>;
-
-export function LoadFocus():Promise<Array<liveroom.LiveRoomInfo>>;
-
-export function MessageDialog(arg1:string,arg2:string):Promise<void>;
-
-export function SelectFile():Promise<string>;

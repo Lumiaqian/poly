@@ -1,9 +1,8 @@
 package platform
 
 import (
-	"changeme/liveroom"
+	"changeme/internal/liveroom"
 	"changeme/pkg/request"
-	"context"
 	"crypto/md5"
 	"fmt"
 	"net/http"
@@ -44,7 +43,7 @@ func NewDoYu() DouYu {
 	}
 }
 
-func (d *DouYu) GetLiveUrl(ctx context.Context, roomId string) (*liveroom.LiveRoom, error) {
+func (d *DouYu) GetLiveUrl(roomId string) (*liveroom.LiveRoom, error) {
 	did := "10000000000000000000000000001501"
 	t10 := strconv.FormatInt(time.Now().Unix(), 10)
 	html := ""
