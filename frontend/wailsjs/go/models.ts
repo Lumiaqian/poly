@@ -95,6 +95,7 @@ export namespace liveroom {
 	    screenshot: string;
 	    gameFullName: string;
 	    liveStatus: number;
+	    favorite: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new LiveRoomInfo(source);
@@ -112,6 +113,7 @@ export namespace liveroom {
 	        this.screenshot = source["screenshot"];
 	        this.gameFullName = source["gameFullName"];
 	        this.liveStatus = source["liveStatus"];
+	        this.favorite = source["favorite"];
 	    }
 	}
 

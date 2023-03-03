@@ -4,6 +4,7 @@ import (
 	"changeme/internal/global"
 	"changeme/internal/liveroom"
 	"changeme/internal/platform"
+	"changeme/pkg/file"
 	"io/ioutil"
 	"sort"
 	"sync"
@@ -16,11 +17,11 @@ import (
 )
 
 const (
-	FcousName = "Fcous"
+	FocusName = "Focus"
 )
 
-type FcousList struct {
-	Fcous []Item `yaml:"fcous"`
+type FocusList struct {
+	Focus []Item `yaml:"focus"`
 }
 
 type Item struct {
@@ -29,32 +30,32 @@ type Item struct {
 	Anchor   string `yaml:"anchor"`   //主播
 }
 
-type FcousService struct {
+type FocusService struct {
 	huya      platform.HuYa
 	bilibili  platform.Bilibili
 	douyu     platform.DouYu
 	log       *wails.CustomLogger
-	fcousList FcousList
+	focusList FocusList
 	roomList  []liveroom.LiveRoomInfo
 	cache     cache.Cache
 	wg        sync.WaitGroup
 }
 
-func NewFcousService() FcousService {
-	log := logger.NewCustomLogger("fcous")
-	return FcousService{
+func NewFocusService() FocusService {
+	log := logger.NewCustomLogger("focus")
+	return FocusService{
 		huya:      platform.NewHuYa(),
 		bilibili:  platform.NewBilibili(),
 		douyu:     platform.NewDoYu(),
 		log:       log,
-		fcousList: FcousList{},
+		focusList: FocusList{},
 		roomList:  []liveroom.LiveRoomInfo{},
 		cache:     *global.Cache,
 		wg:        sync.WaitGroup{},
 	}
 }
 
-func (f *FcousService) InitFcous(path string) error {
+func (f *FocusService) InitFocus(path string) error {
 	if len(f.roomList) > 0 {
 		f.roomList = f.roomList[0:0]
 	}
@@ -62,25 +63,36 @@ func (f *FcousService) InitFcous(path string) error {
 	if err != nil {
 		return err
 	}
-	err = yaml.Unmarshal(yamlFile, &f.fcousList)
+	err = yaml.Unmarshal(yamlFile, &f.focusList)
 	if err != nil {
 		return err
 	}
-	f.getFcousRoomInfo()
+	f.getFocusRoomInfo()
 	return nil
 }
 
-func (f *FcousService) GetFcousRoomInfo() []liveroom.LiveRoomInfo {
-	return f.getFcousRoomInfo()
+func (f *FocusService) GetFocusRoomInfo() []liveroom.LiveRoomInfo {
+	return f.getFocusRoomInfo()
 }
 
-func (f *FcousService) getFcousRoomInfo() []liveroom.LiveRoomInfo {
+func (f *FocusService) getFocusRoomInfo() []liveroom.LiveRoomInfo {
 	f.roomList = f.roomList[0:0]
 
+	if len(global.FocusMap) > 0 {
+		f.focusList.Focus = f.focusList.Focus[0:0]
+		for _, val := range global.FocusMap {
+			f.focusList.Focus = append(f.focusList.Focus, Item{
+				Platform: val.Platform,
+				RoomId:   val.RoomId,
+				Anchor:   val.Anchor,
+			})
+		}
+	}
+
 	ch := make(chan *liveroom.LiveRoomInfo)
-	f.wg.Add(len(f.fcousList.Fcous))
-	for _, fcous := range f.fcousList.Fcous {
-		go f.getRoomInfo(fcous, ch)
+	f.wg.Add(len(f.focusList.Focus))
+	for _, focus := range f.focusList.Focus {
+		go f.getRoomInfo(focus, ch)
 	}
 
 	go func() {
@@ -89,41 +101,75 @@ func (f *FcousService) getFcousRoomInfo() []liveroom.LiveRoomInfo {
 	}()
 	for info := range ch {
 		f.roomList = append(f.roomList, *info)
+		global.FocusMap[global.FormatKey(liveroom.FocusKey, info.Platform, info.RoomId)] = *info
 	}
 	sort.Sort(liveroom.LiveRoomInfoArray(f.roomList))
 	return f.roomList
 }
 
-func (f *FcousService) getRoomInfo(fcous Item, ch chan *liveroom.LiveRoomInfo) {
+func (f *FocusService) getRoomInfo(focus Item, ch chan *liveroom.LiveRoomInfo) {
 	defer f.wg.Done()
-	if roomInfo, ok := global.Cache.Get(global.FormatKey(FcousName, fcous.Platform, fcous.RoomId)); ok {
+	if roomInfo, ok := global.Cache.Get(global.FormatKey(FocusName, focus.Platform, focus.RoomId)); ok {
 		ch <- roomInfo.(*liveroom.LiveRoomInfo)
 		return
 	}
-	switch fcous.Platform {
+	switch focus.Platform {
 	case platform.Huya:
-		roomInfo, err := f.huya.GetRoomInfo(fcous.RoomId)
+		roomInfo, err := f.huya.GetRoomInfo(focus.RoomId)
 		if err != nil {
 			f.log.ErrorFields("GetRoomInfo Huya Err", logger.Fields{"err": err})
 			return
 		}
-		global.Cache.Set(global.FormatKey(FcousName, fcous.Platform, fcous.RoomId), &roomInfo, 3*time.Minute)
+		global.Cache.Set(global.FormatKey(FocusName, focus.Platform, focus.RoomId), &roomInfo, 3*time.Minute)
 		ch <- &roomInfo
 	case platform.Bili:
-		roomInfo, err := f.bilibili.GetRoomInfo(fcous.RoomId)
+		roomInfo, err := f.bilibili.GetRoomInfo(focus.RoomId)
 		if err != nil {
 			f.log.ErrorFields("GetRoomInfo Bilibili Err", logger.Fields{"err": err})
 			return
 		}
-		global.Cache.Set(global.FormatKey(FcousName, fcous.Platform, fcous.RoomId), &roomInfo, 3*time.Minute)
+		global.Cache.Set(global.FormatKey(FocusName, focus.Platform, focus.RoomId), &roomInfo, 3*time.Minute)
 		ch <- &roomInfo
 	case platform.Douyu:
-		roomInfo, err := f.douyu.GetRoomInfo(fcous.RoomId)
+		roomInfo, err := f.douyu.GetRoomInfo(focus.RoomId)
 		if err != nil {
 			f.log.ErrorFields("GetRoomInfo douyu Err", logger.Fields{"err": err})
 			return
 		}
-		global.Cache.Set(global.FormatKey(FcousName, fcous.Platform, fcous.RoomId), &roomInfo, 3*time.Minute)
+		global.Cache.Set(global.FormatKey(FocusName, focus.Platform, focus.RoomId), &roomInfo, 3*time.Minute)
 		ch <- &roomInfo
+	}
+}
+
+func (f *FocusService) Save(roomInfo liveroom.LiveRoomInfo) {
+	if _, ok := global.FocusMap[global.FormatKey(liveroom.FocusKey, roomInfo.Platform, roomInfo.RoomId)]; ok {
+		return
+	}
+	global.FocusMap[global.FormatKey(liveroom.FocusKey, roomInfo.Platform, roomInfo.RoomId)] = roomInfo
+}
+
+func (f *FocusService) Remove(roomInfo liveroom.LiveRoomInfo) {
+	delete(global.FocusMap, global.FormatKey(liveroom.FocusKey, roomInfo.Platform, roomInfo.RoomId))
+}
+
+func (f *FocusService) SaveFocus() {
+	f.focusList.Focus = f.focusList.Focus[0:0]
+	for _, val := range global.FocusMap {
+		f.focusList.Focus = append(f.focusList.Focus, Item{
+			Platform: val.Platform,
+			RoomId:   val.RoomId,
+			Anchor:   val.Anchor,
+		})
+	}
+	f.log.Info("保存关注的列表到文件")
+	path := "./config/"
+	fileName := "focus.yml"
+	data, err := yaml.Marshal(f.focusList)
+	if err != nil {
+		f.log.ErrorFields("yml文件转换失败", logger.Fields{"err": err})
+	}
+	err = file.CreateFileWithDir(path, fileName, data)
+	if err != nil {
+		f.log.ErrorFields("yml文件写入失败", logger.Fields{"err": err})
 	}
 }

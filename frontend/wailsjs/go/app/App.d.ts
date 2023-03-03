@@ -6,6 +6,12 @@ export function Greet(arg1:string):Promise<string>;
 
 export function LoadFocus():Promise<Array<liveroom.LiveRoomInfo>>;
 
+export function LoadLocalFocus():Promise<Array<liveroom.LiveRoomInfo>>;
+
 export function MessageDialog(arg1:string,arg2:string):Promise<void>;
+
+export function RemoveFocus(arg1:liveroom.LiveRoomInfo):Promise<void>;
+
+export function SaveFocus(arg1:liveroom.LiveRoomInfo):Promise<void>;
 
 export function SelectFile():Promise<string>;

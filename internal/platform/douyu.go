@@ -167,7 +167,7 @@ func (d *DouYu) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {
 		return roomInfo, errors.New("request err")
 	}
 
-	return liveroom.LiveRoomInfo{
+	roomInfo = liveroom.LiveRoomInfo{
 		Platform:     Douyu,
 		PlatformName: liveroom.GetPlatform(Douyu),
 		RoomId:       roomId,
@@ -178,7 +178,11 @@ func (d *DouYu) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {
 		Screenshot:   info.Data.RoomThumb,
 		GameFullName: info.Data.CateName,
 		LiveStatus:   lo.If(info.Data.RoomStatus == "1", 2).Else(0),
-	}, nil
+	}
+	if _, ok := global.FocusMap[global.FormatKey(liveroom.FocusKey, Douyu, roomId)]; ok {
+		roomInfo.Favorite = true
+	}
+	return roomInfo, nil
 }
 
 // 斗鱼获取推荐信息

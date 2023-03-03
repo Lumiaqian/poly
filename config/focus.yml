@@ -1,0 +1,40 @@
+focus:
+    - platform: huya
+      roomId: "102411"
+      anchor: 神超
+    - platform: bilibili
+      roomId: "952785"
+      anchor: 解说小米
+    - platform: huya
+      roomId: "344817"
+      anchor: Dae-75战文欲
+    - platform: douyu
+      roomId: "687423"
+      anchor: yjjimpaopao
+    - platform: huya
+      roomId: "229085"
+      anchor: Dae丶红莲
+    - platform: huya
+      roomId: "222523"
+      anchor: kRYST4L
+    - platform: huya
+      roomId: loljiezou
+      anchor: 【节奏】
+    - platform: huya
+      roomId: "333003"
+      anchor: Zz1tai姿态
+    - platform: huya
+      roomId: "7911"
+      anchor: 4AMGodv
+    - platform: bilibili
+      roomId: "23170544"
+      anchor: 真实电竞
+    - platform: bilibili
+      roomId: "1017"
+      anchor: 逍遥散人
+    - platform: douyu
+      roomId: "7084089"
+      anchor: 童扬korol丶
+    - platform: huya
+      roomId: qitux
+      anchor: 弃徒x
