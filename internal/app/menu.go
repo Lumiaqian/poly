@@ -48,10 +48,25 @@ func (a *App) LoadFocus() []liveroom.LiveRoomInfo {
 		a.log.ErrorFields("LoadFocus SelectFile Err", logger.Fields{"err": err})
 		return nil
 	}
-	err = a.Server.focusService.InitFcous(path)
+	err = a.Server.focusService.InitFocus(path)
 	//a.log.InfoFields("")
 	if err != nil {
 		a.MessageDialog("加载关注列表", "失败！")
+		return nil
+	}
+	a.MessageDialog("加载关注列表", "成功！")
+	list := a.Server.GetFocus()
+	a.log.InfoFields("加载关注列表 成功！", logger.Fields{"focusList": list})
+	return list
+}
+
+// 加载指定位置的文件
+func (a *App) LoadLocalFocus() []liveroom.LiveRoomInfo {
+	path := "./config/focus.yml"
+	err := a.Server.focusService.InitFocus(path)
+	//a.log.InfoFields("")
+	if err != nil {
+		a.MessageDialog("加载关注列表失败", "请从菜单->配置中选择文件加载")
 		return nil
 	}
 	a.MessageDialog("加载关注列表", "成功！")
@@ -72,4 +87,14 @@ func (a *App) MessageDialog(title, message string) {
 		a.log.ErrorFields("MessageDialog Err", logger.Fields{"err": err})
 	}
 
+}
+
+// 关注
+func (a *App) SaveFocus(roomInfo liveroom.LiveRoomInfo) {
+	a.Server.focusService.Save(roomInfo)
+}
+
+// 移出关注
+func (a *App) RemoveFocus(roomInfo liveroom.LiveRoomInfo) {
+	a.Server.focusService.Remove(roomInfo)
 }

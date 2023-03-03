@@ -4,6 +4,8 @@ import (
 	"changeme/internal/focus"
 	"changeme/internal/liveroom"
 	"changeme/internal/platform"
+	"math"
+	"sync"
 
 	"github.com/wailsapp/wails"
 	"github.com/wailsapp/wails/lib/logger"
@@ -11,7 +13,7 @@ import (
 
 type Server struct {
 	log          *wails.CustomLogger
-	focusService focus.FcousService
+	focusService focus.FocusService
 	huya         platform.HuYa
 	douyu        platform.DouYu
 	bilibili     platform.Bilibili
@@ -20,7 +22,7 @@ type Server struct {
 func NewServer() *Server {
 	return &Server{
 		log:          logger.NewCustomLogger("Server"),
-		focusService: focus.NewFcousService(),
+		focusService: focus.NewFocusService(),
 		huya:         platform.NewHuYa(),
 		douyu:        platform.NewDoYu(),
 		bilibili:     platform.NewBilibili(),
@@ -29,7 +31,7 @@ func NewServer() *Server {
 
 // 获取直播流
 func (s *Server) GetLiveRoom(platformName, roomId string) liveroom.LiveRoom {
-	s.log.InfoFields("GetLiveRoom", logger.Fields{"platformName": platformName})
+	s.log.InfoFields("GetLiveRoom", logger.Fields{"platformName": platformName, "roomId": roomId})
 	room := liveroom.LiveRoom{}
 	switch platformName {
 	case platform.Huya:
@@ -112,11 +114,51 @@ func (a *Server) GetLiveRoomInfo(platformName, roomId string) liveroom.LiveRoomI
 
 // 获取关注列表
 func (a *Server) GetFocus() []liveroom.LiveRoomInfo {
-	return a.focusService.GetFcousRoomInfo()
+	return a.focusService.GetFocusRoomInfo()
 }
 
 // 获取All推荐列表
 func (a *Server) GetRecommend(page, pageSize int) []liveroom.LiveRoomInfo {
+	roomInfos := make([]liveroom.LiveRoomInfo, 0, pageSize)
+	wg := sync.WaitGroup{}
+	ch := make(chan []liveroom.LiveRoomInfo)
+	wg.Add(3)
 
-	return nil
+	go func(page, pageSize int) {
+		defer wg.Done()
+		list, err := a.huya.GetRecommend(page, pageSize)
+		if err != nil {
+			return
+		}
+		ch <- list
+	}(page, pageSize)
+
+	go func(page, pageSize int) {
+		defer wg.Done()
+		list, err := a.douyu.GetRecommend(page, pageSize)
+		if err != nil {
+			return
+		}
+		ch <- list
+	}(page, pageSize)
+
+	go func(page, pageSize int) {
+		defer wg.Done()
+		list, err := a.bilibili.GetRecommend(page, pageSize)
+		if err != nil {
+			return
+		}
+		ch <- list
+	}(page, pageSize)
+
+	go func() {
+		wg.Wait()
+		close(ch)
+	}()
+	for list := range ch {
+		roomInfos = append(roomInfos, list[0:int(math.Ceil(float64(pageSize)/3.0))]...)
+	}
+	roomInfos = roomInfos[0:pageSize]
+	//a.log.InfoFields("GetRecommend roomInfos", logger.Fields{"roomInfos": roomInfos})
+	return roomInfos
 }

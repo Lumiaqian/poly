@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"changeme/internal/global"
 	"changeme/internal/liveroom"
 	"changeme/pkg/request"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/guonaihong/gout"
 	"github.com/pkg/errors"
@@ -200,7 +202,7 @@ func (b *Bilibili) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {
 		return roomInfo, err
 	}
 	b.log.InfoFields("getH5InfoByRoom结果：", logger.Fields{"result": resp})
-	return liveroom.LiveRoomInfo{
+	roomInfo = liveroom.LiveRoomInfo{
 		Platform:     Bili,
 		PlatformName: liveroom.GetPlatform(Bili),
 		RoomId:       roomId,
@@ -211,11 +213,18 @@ func (b *Bilibili) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {
 		Screenshot:   lo.If(resp.Data.RoomInfo.Cover != "" && !strings.Contains(resp.Data.RoomInfo.Cover, "https"), strings.ReplaceAll(resp.Data.RoomInfo.Cover, "http", "https")).Else(resp.Data.RoomInfo.Cover),
 		GameFullName: resp.Data.RoomInfo.AreaName,
 		LiveStatus:   lo.If(resp.Data.RoomInfo.LiveStatus == 1, 2).Else(0),
-	}, nil
+	}
+	if _, ok := global.FocusMap[global.FormatKey(liveroom.FocusKey, Bili, roomId)]; ok {
+		roomInfo.Favorite = true
+	}
+	return roomInfo, err
 }
 
 // 获取哔哩哔哩推荐
 func (b *Bilibili) GetRecommend(page, pageSize int) ([]liveroom.LiveRoomInfo, error) {
+	if list, ok := global.Cache.Get(global.FormatKey(liveroom.RecommendKey, Bili, strconv.Itoa(page), strconv.Itoa(pageSize))); ok {
+		return list.([]liveroom.LiveRoomInfo), nil
+	}
 	var resp struct {
 		Code    int    `json:"code"`
 		Message string `json:"message"`
@@ -269,5 +278,6 @@ func (b *Bilibili) GetRecommend(page, pageSize int) ([]liveroom.LiveRoomInfo, er
 			roomInfos = append(roomInfos, *info)
 		}
 	}
+	global.Cache.Set(global.FormatKey(liveroom.RecommendKey, Bili, strconv.Itoa(page), strconv.Itoa(pageSize)), roomInfos, 10*time.Minute)
 	return roomInfos, nil
 }

@@ -33,6 +33,7 @@ func NewApp() *App {
 func (a *App) Startup(ctx context.Context) {
 	// Perform your setup here
 	a.ctx = ctx
+	a.LoadLocalFocus()
 }
 
 // domReady is called after front-end resources have been loaded
@@ -44,6 +45,7 @@ func (a *App) DomReady(ctx context.Context) {
 // either by clicking the window close button or calling runtime.Quit.
 // Returning true will cause the application to continue, false will continue shutdown as normal.
 func (a *App) BeforeClose(ctx context.Context) (prevent bool) {
+	a.Server.focusService.SaveFocus()
 	return false
 }
 

@@ -19,6 +19,8 @@
                         {{ platformName }} · {{ roomInfo.gameFullName }} · {{ roomInfo.anchor }}
                     </div>
                 </div>
+                <q-btn v-if = "roomInfo.favorite" class="room-info-favorite" round color="red" glossy icon="favorite" @click="focus" />
+                <q-btn v-else class="room-info-favorite" round color="grey" glossy icon="favorite" @click="focus" />
             </div>
         </div>
     </div>
@@ -27,7 +29,7 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive,onBeforeMount } from 'vue'
 import DPlayer from 'components/DPlayer.vue';
-import { GetLiveRoomInfo, LogInfo } from '../../wailsjs';
+import { GetLiveRoomInfo, LogInfo,SaveFocus,RemoveFocus } from '../../wailsjs';
 import { useRoute } from 'vue-router'; 
 const route = useRoute()
 const platform = ref('')
@@ -44,6 +46,9 @@ const roomInfo = reactive({
     onLineCount: 0,
     screenshot: '',
     gameFullName: '',
+    favorite: false,
+    platformName: '',
+    liveStatus: 2,
 })
 
 
@@ -65,6 +70,7 @@ const initRoomInfo = () => GetLiveRoomInfo(platform.value, roomId.value).then((r
     roomInfo.onLineCount = res.onLineCount;
     roomInfo.screenshot = res.screenshot;
     platformName.value = res.platformName;
+    roomInfo.favorite = res.favorite
     
 })
 
@@ -82,6 +88,15 @@ function isLive(): boolean {
     return live.value;
 }
 
+function focus() {
+    if (roomInfo.favorite === true) {
+        roomInfo.favorite = false
+        RemoveFocus(roomInfo)
+    }else {
+        roomInfo.favorite = true
+        SaveFocus(roomInfo)
+    }
+}
 
 </script>
  
@@ -137,6 +152,11 @@ function isLive(): boolean {
     margin-top: 8px;
 }
 
+.room-info-favorite{
+    float: left;
+    margin: 10px;
+    margin-top: 8px;
+}
 .room-info-after-head-name {
     font-weight: bold;
     font-size: 20px;

@@ -24,7 +24,7 @@
     >
       <q-list dark>
         <q-item-label header>Author:LumiaQian</q-item-label>
-        <q-item clickable rel="noopener" to="/">
+        <q-item clickable rel="noopener" to="/index">
           <q-item-section avatar>
             <q-icon name="home" />
           </q-item-section>

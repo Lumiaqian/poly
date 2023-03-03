@@ -283,6 +283,9 @@ func (h *HuYa) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {
 	roomInfo.Platform = "huya"
 	roomInfo.PlatformName = liveroom.GetPlatform(roomInfo.Platform)
 	roomInfo.RoomId = roomId
+	if _, ok := global.FocusMap[global.FormatKey(liveroom.FocusKey, roomInfo.Platform, roomInfo.RoomId)]; ok {
+		roomInfo.Favorite = true
+	}
 	return roomInfo, nil
 }
 
@@ -352,6 +355,9 @@ func (h *HuYa) GetAllAreaInfo() ([]liveroom.AreaInfo, error) {
 
 // 获取虎牙推荐
 func (h *HuYa) GetRecommend(page, pageSize int) ([]liveroom.LiveRoomInfo, error) {
+	if list, ok := global.Cache.Get(global.FormatKey(liveroom.RecommendKey, Huya, strconv.Itoa(page), strconv.Itoa(pageSize))); ok {
+		return list.([]liveroom.LiveRoomInfo), nil
+	}
 	realPage := page/6 + 1
 	start := (page - 1) * pageSize % 120
 	if pageSize == 10 {
@@ -362,13 +368,13 @@ func (h *HuYa) GetRecommend(page, pageSize int) ([]liveroom.LiveRoomInfo, error)
 		Status int `json:"status"`
 		Data   struct {
 			Datas []struct {
-				ProfileRomm  string `json:"profileRo0m"`
+				ProfileRoom  string `json:"profileRoom"`
 				Gid          string `json:"gid"`
 				GameFullName string `json:"gameFullName"`
 				RoomName     string `json:"roomName"`
 				Nick         string `json:"nick"`
 				Screenshot   string `json:"screenshot"`
-				Avatar       string `json:"avart180"`
+				Avatar       string `json:"avatar180"`
 				TatalCount   string `json:"totalCount"`
 			} `json:"datas"`
 		} `json:"data"`
@@ -379,19 +385,22 @@ func (h *HuYa) GetRecommend(page, pageSize int) ([]liveroom.LiveRoomInfo, error)
 	if err != nil {
 		return nil, err
 	}
-	h.log.InfoFields("roomInfos", logger.Fields{"roomInfos": resp, "start": start})
+	h.log.InfoFields("roomInfos", logger.Fields{"roomInfos": resp, "start": start, "size": start + pageSize})
 	roomInfos := make([]liveroom.LiveRoomInfo, 0, start+pageSize)
 	if resp.Status == 200 {
 		for i := start; i < start+pageSize; i++ {
+			if i >= len(resp.Data.Datas) {
+				break
+			}
 			count, err := strconv.Atoi(resp.Data.Datas[i].TatalCount)
 			if err != nil {
 				h.log.InfoFields("GetRoomInfo Count Err", logger.Fields{"count": count})
 				break
 			}
-			roomInfos = append(roomInfos, liveroom.LiveRoomInfo{
+			roomInfo := liveroom.LiveRoomInfo{
 				Platform:     Huya,
 				PlatformName: liveroom.GetPlatform(Huya),
-				RoomId:       resp.Data.Datas[i].ProfileRomm,
+				RoomId:       resp.Data.Datas[i].ProfileRoom,
 				RoomName:     resp.Data.Datas[i].RoomName,
 				Anchor:       resp.Data.Datas[i].Nick,
 				Avatar:       lo.If(resp.Data.Datas[i].Avatar != "" && !strings.Contains(resp.Data.Datas[i].Avatar, "https"), strings.ReplaceAll(resp.Data.Datas[i].Avatar, "http", "https")).Else(resp.Data.Datas[i].Avatar),
@@ -399,8 +408,13 @@ func (h *HuYa) GetRecommend(page, pageSize int) ([]liveroom.LiveRoomInfo, error)
 				Screenshot:   lo.If(resp.Data.Datas[i].Screenshot != "" && !strings.Contains(resp.Data.Datas[i].Screenshot, "https"), strings.ReplaceAll(resp.Data.Datas[i].Screenshot, "http", "https")).Else(resp.Data.Datas[i].Screenshot),
 				GameFullName: resp.Data.Datas[i].GameFullName,
 				LiveStatus:   2,
-			})
+			}
+			if _, ok := global.FocusMap[global.FormatKey(liveroom.FocusKey, roomInfo.Platform, roomInfo.RoomId)]; ok {
+				roomInfo.Favorite = true
+			}
+			roomInfos = append(roomInfos, roomInfo)
 		}
 	}
+	global.Cache.Set(global.FormatKey(liveroom.RecommendKey, Huya, strconv.Itoa(page), strconv.Itoa(pageSize)), roomInfos, 10*time.Minute)
 	return roomInfos, nil
 }

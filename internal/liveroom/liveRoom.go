@@ -3,6 +3,7 @@ package liveroom
 const (
 	AreaInfosKey = "AreaInfos"
 	RecommendKey = "RecommendList"
+	FocusKey     = "Focus"
 )
 
 type LiveRoom struct {
@@ -49,6 +50,7 @@ type LiveRoomInfo struct {
 	Screenshot   string `json:"screenshot"`   //房间封面图
 	GameFullName string `json:"gameFullName"` //类别
 	LiveStatus   int    `json:"liveStatus"`   //直播状态,0-off,2-on,1-replay
+	Favorite     bool   `json:"favorite"`     //是否已关注
 }
 
 // 平台代码转换

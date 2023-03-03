@@ -69,7 +69,7 @@ export default {
 
   setup() {
 
-    const rows = reactive([{}])
+    const rows = reactive([] as RoomInfo[])
 
     const initRoomInfo = () => GetFocus().then((res) => {
       rows.length = 0

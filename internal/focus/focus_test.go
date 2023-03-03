@@ -2,11 +2,11 @@ package focus
 
 import "testing"
 
-var fcousService = NewFcousService()
+var focusService = NewFocusService()
 
-func TestGetFcousRoomInfo(t *testing.T) {
-	fcousService.InitFcous("/Users/lumiaqian/Desktop/focus.yml")
-	list := fcousService.GetFcousRoomInfo()
+func TestGetFocusRoomInfo(t *testing.T) {
+	focusService.InitFocus("/Users/lumiaqian/Desktop/focus.yml")
+	list := focusService.GetFocusRoomInfo()
 	if list == nil {
 		t.Fail()
 	}

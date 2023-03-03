@@ -10,8 +10,20 @@ export function LoadFocus() {
   return window['go']['app']['App']['LoadFocus']();
 }
 
+export function LoadLocalFocus() {
+  return window['go']['app']['App']['LoadLocalFocus']();
+}
+
 export function MessageDialog(arg1, arg2) {
   return window['go']['app']['App']['MessageDialog'](arg1, arg2);
+}
+
+export function RemoveFocus(arg1) {
+  return window['go']['app']['App']['RemoveFocus'](arg1);
+}
+
+export function SaveFocus(arg1) {
+  return window['go']['app']['App']['SaveFocus'](arg1);
 }
 
 export function SelectFile() {
