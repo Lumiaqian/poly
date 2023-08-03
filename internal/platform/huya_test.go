@@ -15,7 +15,8 @@ func TestGetLiveUrl(t *testing.T) {
 	if err != nil {
 		t.Fail()
 	}
-	t.Logf("liveroom:%+v", liveroom)
+	t.Logf("liveroom:%+v \n", liveroom)
+	t.Logf("liveroom.LiveUrl:%+v\n", liveroom.LiveUrl)
 }
 
 func TestGetRoomInfo(t *testing.T) {

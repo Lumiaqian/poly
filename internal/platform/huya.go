@@ -138,19 +138,7 @@ func extractInfo(content string) (*liveroom.LiveRoom, error) {
 		urls = append(urls, urlStr)
 		return true
 	})
-	liveLineUrl := parse.Get("roomProfile.liveLineUrl").String()
-
-	liveUrlByteData, err := base64.StdEncoding.DecodeString(liveLineUrl)
-	if err != nil {
-		return nil, errors.New("未开播或直播间不存在")
-	}
-	liveUrl, err := live(liveUrlByteData)
-	if err != nil {
-		return nil, errors.New("未开播或直播间不存在")
-	}
-	liveUrl = strings.ReplaceAll("https:"+liveUrl, "hls", "flv")
-	liveUrl = strings.ReplaceAll(liveUrl, "m3u8", "flv")
-	liveUrl = strings.ReplaceAll(liveUrl, "&ctype=tars_mobile", "")
+	liveUrl := urls[rand.Intn(len(urls)-1)]
 	return &liveroom.LiveRoom{
 		LiveUrl: liveUrl,
 	}, nil
