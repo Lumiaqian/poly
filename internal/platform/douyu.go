@@ -5,7 +5,9 @@ import (
 	"changeme/internal/liveroom"
 	"changeme/pkg/request"
 	"crypto/md5"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -13,7 +15,6 @@ import (
 	"time"
 
 	"github.com/dop251/goja"
-	"github.com/guonaihong/gout"
 	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
@@ -39,6 +40,25 @@ type DouYu struct {
 	cache      cache.Cache
 }
 
+type RealUrlResp struct {
+	Code int64 `json:"code"`
+	Data Data  `json:"data"`
+}
+
+type Data struct {
+	Settings        []Setting `json:"settings"`
+	URL             string    `json:"url"`
+	Rate            int64     `json:"rate"`
+	Pass            int64     `json:"pass"`
+	ShareOffsetTime int64     `json:"share_offset_time"`
+}
+
+type Setting struct {
+	Name    string `json:"name"`
+	Rate    int64  `json:"rate"`
+	HighBit int64  `json:"high_bit"`
+}
+
 func NewDoYu() DouYu {
 	return DouYu{
 		httpClient: http.Client{},
@@ -47,100 +67,142 @@ func NewDoYu() DouYu {
 	}
 }
 
-func (d *DouYu) GetLiveUrl(roomId string) (*liveroom.LiveRoom, error) {
-	did := "10000000000000000000000000001501"
-	t10 := strconv.FormatInt(time.Now().Unix(), 10)
-	html := ""
-	if err := request.HTTP().GET(fmt.Sprintf("https://www.douyu.com/%s", roomId)).BindBody(&html).Do(); err != nil {
-		return nil, err
-	}
-	result := regexp.MustCompile(DouYuMatch).FindString(html)
-	jsUb9 := strings.TrimSuffix(result, "function")
-	jsUb9 = regexp.MustCompile(`eval.*?;}`).ReplaceAllString(jsUb9, `strc;}`)
-	vm := goja.New()
+func md5V3(str string) string {
+	w := md5.New()
+	io.WriteString(w, str)
+	md5str := fmt.Sprintf("%x", w.Sum(nil))
+	return md5str
+}
 
-	if _, err := vm.RunString(jsUb9); err != nil {
-		return nil, err
+func (d *DouYu) getDid() (string, error) {
+	timeStamp := strconv.FormatInt(time.Now().UnixNano()/1000000, 10)
+	url := "https://passport.douyu.com/lapi/did/api/get?client_id=25&_=" + timeStamp + "&callback=axiosJsonpCallback1"
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Add("user-agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.3 Mobile/15E148 Safari/604.1")
+	req.Header.Set("referer", "https://m.douyu.com/")
+	resp, err := d.httpClient.Do(req)
+	if err != nil {
+		return "", err
 	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	re := regexp.MustCompile(`axiosJsonpCallback1\((.*)\)`)
+	match := re.FindStringSubmatch(string(body))
+	var result map[string]map[string]string
+	json.Unmarshal([]byte(match[1]), &result)
+	return result["data"]["did"], nil
+}
 
-	ub9, ok := goja.AssertFunction(vm.Get("ub98484234"))
-	if !ok {
-		return nil, fmt.Errorf("failed to assert function ub9")
-	}
-	res, err := ub9(goja.Undefined())
+func (d *DouYu) GetRealUrl(roomId, streamType string) (*liveroom.LiveRoom, error) {
+	did, err := d.getDid()
 	if err != nil {
 		return nil, err
 	}
-	value := regexp.MustCompile(`v=(\d+)`).FindAllStringSubmatch(res.String(), -1)[0][1]
+	var timestamp = time.Now().Unix()
+	liveurl := "https://m.douyu.com/" + roomId
+	client := &http.Client{}
+	r, _ := http.NewRequest("GET", liveurl, nil)
+	r.Header.Add("user-agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.3 Mobile/15E148 Safari/604.1")
+	r.Header.Add("upgrade-insecure-requests", "1")
+	resp, err := client.Do(r)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	roomidreg := regexp.MustCompile(`(?i)rid":(\d{1,8}),"vipId`)
+	roomidres := roomidreg.FindStringSubmatch(string(body))
+	if roomidres == nil {
+		return nil, errors.New("roomid not found")
+	}
+	realroomid := roomidres[1]
+	reg := regexp.MustCompile(`(?i)(function ub98484234.*)\s(var.*)`)
+	res := reg.FindStringSubmatch(string(body))
+	nreg := regexp.MustCompile(`(?i)eval.*;}`)
+	strfn := nreg.ReplaceAllString(res[0], "strc;}")
+	vm := goja.New()
+	_, err = vm.RunString(strfn)
+	if err != nil {
+		return nil, err
+	}
+	jsfn, ok := goja.AssertFunction(vm.Get("ub98484234"))
+	if !ok {
+		return nil, errors.New("ub98484234 not found")
+	}
+	result, err := jsfn(
+		goja.Undefined(),
+		vm.ToValue("ub98484234"),
+	)
+	if err != nil {
+		return nil, err
+	}
+	nres := fmt.Sprintf("%s", result)
+	nnreg := regexp.MustCompile(`(?i)v=(\d+)`)
+	nnres := nnreg.FindStringSubmatch(nres)
+	unrb := fmt.Sprintf("%v%v%v%v", realroomid, did, timestamp, nnres[1])
+	rb := md5V3(unrb)
+	nnnreg := regexp.MustCompile(`(?i)return rt;}\);?`)
+	strfn2 := nnnreg.ReplaceAllString(nres, "return rt;}")
+	strfn3 := strings.Replace(strfn2, `(function (`, `function sign(`, -1)
+	strfn4 := strings.Replace(strfn3, `CryptoJS.MD5(cb).toString()`, `"`+rb+`"`, -1)
 
-	rb := fmt.Sprintf("%x", md5.Sum([]byte(fmt.Sprintf("%s%s%s%s", roomId, did, t10, value))))
-	funcSign := regexp.MustCompile(`return rt;}\);?`).ReplaceAllString(res.String(), `return rt;}`)
-	funcSign = strings.ReplaceAll(funcSign, `(function (`, `function sign(`)
-	funcSign = strings.ReplaceAll(funcSign, `CryptoJS.MD5(cb).toString()`, `"`+rb+`"`)
-
-	if _, err = vm.RunString(funcSign); err != nil {
+	_, err = vm.RunString(strfn4)
+	if err != nil {
 		return nil, err
 	}
 	sign, ok := goja.AssertFunction(vm.Get("sign"))
 	if !ok {
-		return nil, fmt.Errorf("failed to assert function sign")
+		return nil, errors.New("sign not found")
 	}
-	param, err := sign(goja.Undefined(), vm.ToValue(roomId), vm.ToValue(did), vm.ToValue(t10))
+	param, err := sign(
+		goja.Undefined(),
+		vm.ToValue(realroomid),
+		vm.ToValue(did),
+		vm.ToValue(timestamp),
+	)
 	if err != nil {
 		return nil, err
 	}
-	params := fmt.Sprintf("%s&cdn=ws-h5&rate=%d", param, 0)
+	params := fmt.Sprintf("%s&ver=22107261&rid=%s&rate=-1", param, realroomid)
+	r1, n4err := http.Post("https://m.douyu.com/api/room/ratestream", "application/x-www-form-urlencoded", strings.NewReader(params))
+	if n4err != nil {
+		panic(n4err)
+	}
+	defer r1.Body.Close()
+	body1, _ := io.ReadAll(r1.Body)
+	var realUrlResp RealUrlResp
+	json.Unmarshal(body1, &realUrlResp)
+	var hlsUrl string
+	if realUrlResp.Code != 0 {
+		return nil, errors.New("roomid not found")
+	}
+	hlsUrl = realUrlResp.Data.URL
+	n4reg := regexp.MustCompile(`(?i)(\d{1,8}[0-9a-zA-Z]+)_?\d{0,4}(.m3u8|/playlist)`)
+	suffix := n4reg.FindStringSubmatch(hlsUrl)
+	var realUrl string
+	flvUrl := "http://openhls-tct.douyucdn2.cn/dyliveflv1/" + suffix[1] + ".flv?uuid="
+	xsUrl := "http://openhls-tct.douyucdn2.cn/dyliveflv1/" + suffix[1] + ".xs?uuid="
+	switch streamType {
+	case "hls":
+		realUrl = hlsUrl
+	case "flv":
+		realUrl = flvUrl
+	case "xs":
+		realUrl = xsUrl
+	}
+	room := new(liveroom.LiveRoom)
+	room.LiveUrl = realUrl
+	room.Platform = Platform
+	room.PlatformName = liveroom.GetPlatform(room.Platform)
+	room.RoomId = roomId
+	return room, nil
+}
 
-	var resp struct {
-		Error int    `json:"error"`
-		Msg   string `json:"msg"`
-		Data  struct {
-			RoomID       int64  `json:"room_id"`
-			IsMixed      bool   `json:"is_mixed"`
-			MixedLive    string `json:"mixed_live"`
-			MixedURL     string `json:"mixed_url"`
-			RtmpCdn      string `json:"rtmp_cdn"`
-			RtmpURL      string `json:"rtmp_url"`
-			RtmpLive     string `json:"rtmp_live"`
-			ClientIP     string `json:"client_ip"`
-			InNA         int    `json:"inNA"`
-			RateSwitch   int    `json:"rateSwitch"`
-			Rate         int    `json:"rate"`
-			CdnsWithName []*struct {
-				Name   string `json:"name"`
-				Cdn    string `json:"cdn"`
-				IsH265 bool   `json:"isH265"`
-			} `json:"cdnsWithName"`
-			Multirates []*struct {
-				Name    string `json:"name"`
-				Rate    int    `json:"rate"`
-				HighBit int    `json:"highBit"`
-				Bit     int    `json:"bit"`
-			} `json:"multirates"`
-		}
-	}
-
-	err = request.HTTP().POST(fmt.Sprintf("https://www.douyu.com/lapi/live/getH5Play/%s?", roomId) + params).
-		SetHeader(gout.H{
-			"UserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36",
-			"referer":   "https://www.douyu.com/",
-			"origin":    "https://www.douyu.com",
-		}).
-		BindJSON(&resp).
-		Do()
-	if err != nil {
-		return nil, err
-	}
-	d.log.InfoFields("resp", logger.Fields{"resp": resp})
-	if resp.Error != 0 {
-		return nil, fmt.Errorf("failed to get live url: %s", resp.Msg)
-	}
-	return &liveroom.LiveRoom{
-		Platform:     Douyu,
-		PlatformName: liveroom.GetPlatform(Douyu),
-		RoomId:       roomId,
-		LiveUrl:      fmt.Sprintf("https://hw-tct.douyucdn.cn/live/%s?uuid=", strings.Split(resp.Data.RtmpLive, "?")[0]),
-	}, nil
+func (d *DouYu) GetLiveUrl(roomId string) (*liveroom.LiveRoom, error) {
+	return d.GetRealUrl(roomId, "flv")
 }
 
 func (d *DouYu) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {

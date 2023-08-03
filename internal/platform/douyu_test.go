@@ -6,8 +6,16 @@ import (
 
 var douyu = NewDoYu()
 
+func TestGetRealUrl(t *testing.T) {
+	room, err := douyu.GetRealUrl("7084089", "hls")
+	if err != nil {
+		t.Fail()
+	}
+	t.Logf("room:%+v", room)
+}
+
 func TestGetDouyuLiveUrl(t *testing.T) {
-	liveUrl, err := douyu.GetLiveUrl("687423")
+	liveUrl, err := douyu.GetLiveUrl("7084089")
 	if err != nil {
 		t.Fail()
 	}
