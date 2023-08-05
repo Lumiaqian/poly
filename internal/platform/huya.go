@@ -3,7 +3,6 @@ package platform
 import (
 	"changeme/internal/global"
 	"changeme/internal/liveroom"
-	"changeme/pkg/codec"
 	"changeme/pkg/request"
 	"crypto/md5"
 	"encoding/base64"
@@ -140,7 +139,7 @@ func extractInfo(content string) (*liveroom.LiveRoom, error) {
 	})
 	liveUrl := urls[rand.Intn(len(urls)-1)]
 	return &liveroom.LiveRoom{
-		LiveUrl: liveUrl,
+		LiveUrl: strings.Replace(liveUrl, "http://", "https://", 1),
 	}, nil
 }
 
@@ -193,44 +192,6 @@ func MD5(str []byte) string {
 	h := md5.New()
 	h.Write(str)
 	return hex.EncodeToString(h.Sum(nil))
-}
-
-func live(byteData []byte) (string, error) {
-	liveUrl := string(byteData)
-	strs := strings.Split(liveUrl, "?")
-	if len(strs) <= 1 {
-		return "", errors.New("未开播或直播间不存在")
-	}
-	r := strings.Split(strs[0], "/")
-	reg := regexp.MustCompile(`.(flv|m3u8)`)
-	s := reg.ReplaceAllString(r[len(r)-1], "")
-	c := strings.SplitN(strs[1], "&", 4)
-	c1 := []string{}
-	for _, str := range c {
-		if str != "" {
-			c1 = append(c1, str)
-		}
-	}
-	n := make(map[string]string)
-	for _, str := range c1 {
-		cs := strings.Split(str, "=")
-		n[cs[0]] = cs[1]
-	}
-	fm, err := url.QueryUnescape(n["fm"])
-	if err != nil {
-		return "", err
-	}
-	u := codec.Base64Decode(fm)
-	p := strings.Split(u, "_")[0]
-	f := strconv.Itoa(int(time.Now().UnixNano()))
-	l := n["wsTime"]
-	t := "0"
-	hs := []string{p, t, s, f, l}
-	h := strings.Join(hs, "_")
-	m := codec.CalcMD5(h)
-	y := c1[len(c1)-1]
-	url := fmt.Sprintf("%s?wsSecret=%s&wsTime=%s&u=%s&seqid=%s&%s", strs[0], m, l, t, f, y)
-	return url, nil
 }
 
 // 获取直播流详细信息

@@ -28,7 +28,9 @@ const props = defineProps({
 
 const artRef = ref('')
 
+// eslint-disable-next-line vue/no-dupe-keys
 const platform = ref('');
+// eslint-disable-next-line vue/no-dupe-keys
 const roomId = ref('');
 
 

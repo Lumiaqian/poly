@@ -179,19 +179,15 @@ func (d *DouYu) GetRealUrl(roomId, streamType string) (*liveroom.LiveRoom, error
 	if realUrlResp.Code != 0 {
 		return nil, errors.New("roomid not found")
 	}
-	hlsUrl = realUrlResp.Data.URL
-	n4reg := regexp.MustCompile(`(?i)(\d{1,8}[0-9a-zA-Z]+)_?\d{0,4}(.m3u8|/playlist)`)
-	suffix := n4reg.FindStringSubmatch(hlsUrl)
+	hlsUrl = strings.Replace(realUrlResp.Data.URL, "http://", "https://", 1)
 	var realUrl string
-	flvUrl := "http://openhls-tct.douyucdn2.cn/dyliveflv1/" + suffix[1] + ".flv?uuid="
-	xsUrl := "http://openhls-tct.douyucdn2.cn/dyliveflv1/" + suffix[1] + ".xs?uuid="
 	switch streamType {
 	case "hls":
 		realUrl = hlsUrl
 	case "flv":
-		realUrl = flvUrl
+		realUrl = strings.Replace(hlsUrl, "m3u8", "flv", 1)
 	case "xs":
-		realUrl = xsUrl
+		realUrl = strings.Replace(hlsUrl, "m3u8", "xs", 1)
 	}
 	room := new(liveroom.LiveRoom)
 	room.LiveUrl = realUrl
@@ -202,7 +198,7 @@ func (d *DouYu) GetRealUrl(roomId, streamType string) (*liveroom.LiveRoom, error
 }
 
 func (d *DouYu) GetLiveUrl(roomId string) (*liveroom.LiveRoom, error) {
-	return d.GetRealUrl(roomId, "flv")
+	return d.GetRealUrl(roomId, "hls")
 }
 
 func (d *DouYu) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {

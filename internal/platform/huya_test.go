@@ -11,7 +11,7 @@ func TestGetStreamInfo(t *testing.T) {
 }
 
 func TestGetLiveUrl(t *testing.T) {
-	liveroom, err := huya.GetLiveUrl("222523")
+	liveroom, err := huya.GetLiveUrl("102411")
 	if err != nil {
 		t.Fail()
 	}
