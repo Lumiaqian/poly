@@ -1,16 +1,14 @@
 package file
 
 import (
+	"fmt"
 	"os"
 )
 
-// 写入文件，path:./ fileName:focus.yml
-func CreateFileWithDir(path, fileName string, data []byte) error {
-	err := os.MkdirAll(path, os.ModePerm)
-	if err != nil {
-		return err
-	}
-	file, err := os.Create(path + fileName)
+// 写入文件，path:~/.config/poly/focus.yml
+func CreateFileWithDir(path string, data []byte) error {
+	fmt.Println(path)
+	file, err := os.Create(path)
 	if err != nil {
 		return err
 	}

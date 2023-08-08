@@ -5,7 +5,7 @@ import (
 	"changeme/internal/liveroom"
 	"changeme/internal/platform"
 	"changeme/pkg/file"
-	"io/ioutil"
+	"os"
 	"sort"
 	"sync"
 	"time"
@@ -14,6 +14,8 @@ import (
 	"github.com/wailsapp/wails"
 	"github.com/wailsapp/wails/lib/logger"
 	"gopkg.in/yaml.v3"
+
+	C "changeme/internal/constant"
 )
 
 const (
@@ -59,7 +61,7 @@ func (f *FocusService) InitFocus(path string) error {
 	if len(f.roomList) > 0 {
 		f.roomList = f.roomList[0:0]
 	}
-	yamlFile, err := ioutil.ReadFile(path)
+	yamlFile, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
@@ -78,9 +80,10 @@ func (f *FocusService) GetFocusRoomInfo() []liveroom.LiveRoomInfo {
 func (f *FocusService) getFocusRoomInfo() []liveroom.LiveRoomInfo {
 	f.roomList = f.roomList[0:0]
 
-	if len(global.FocusMap) > 0 {
+	if global.FocusMap.ItemCount() > 0 {
 		f.focusList.Focus = f.focusList.Focus[0:0]
-		for _, val := range global.FocusMap {
+		for _, item := range global.FocusMap.Items() {
+			val := item.Object.(*liveroom.LiveRoomInfo)
 			f.focusList.Focus = append(f.focusList.Focus, Item{
 				Platform: val.Platform,
 				RoomId:   val.RoomId,
@@ -101,7 +104,7 @@ func (f *FocusService) getFocusRoomInfo() []liveroom.LiveRoomInfo {
 	}()
 	for info := range ch {
 		f.roomList = append(f.roomList, *info)
-		global.FocusMap[global.FormatKey(liveroom.FocusKey, info.Platform, info.RoomId)] = *info
+		global.FocusMap.Set(global.FormatKey(FocusName, info.Platform, info.RoomId), info, cache.NoExpiration)
 	}
 	sort.Sort(liveroom.LiveRoomInfoArray(f.roomList))
 	return f.roomList
@@ -142,19 +145,20 @@ func (f *FocusService) getRoomInfo(focus Item, ch chan *liveroom.LiveRoomInfo) {
 }
 
 func (f *FocusService) Save(roomInfo liveroom.LiveRoomInfo) {
-	if _, ok := global.FocusMap[global.FormatKey(liveroom.FocusKey, roomInfo.Platform, roomInfo.RoomId)]; ok {
+	if _, ok := global.FocusMap.Get(global.FormatKey(liveroom.FocusKey, roomInfo.Platform, roomInfo.RoomId)); ok {
 		return
 	}
-	global.FocusMap[global.FormatKey(liveroom.FocusKey, roomInfo.Platform, roomInfo.RoomId)] = roomInfo
+	global.FocusMap.Set(global.FormatKey(liveroom.FocusKey, roomInfo.Platform, roomInfo.RoomId), roomInfo, cache.NoExpiration)
 }
 
 func (f *FocusService) Remove(roomInfo liveroom.LiveRoomInfo) {
-	delete(global.FocusMap, global.FormatKey(liveroom.FocusKey, roomInfo.Platform, roomInfo.RoomId))
+	global.FocusMap.Delete(global.FormatKey(liveroom.FocusKey, roomInfo.Platform, roomInfo.RoomId))
 }
 
 func (f *FocusService) SaveFocus() {
 	f.focusList.Focus = f.focusList.Focus[0:0]
-	for _, val := range global.FocusMap {
+	for _, item := range global.FocusMap.Items() {
+		val := item.Object.(*liveroom.LiveRoomInfo)
 		f.focusList.Focus = append(f.focusList.Focus, Item{
 			Platform: val.Platform,
 			RoomId:   val.RoomId,
@@ -162,13 +166,11 @@ func (f *FocusService) SaveFocus() {
 		})
 	}
 	f.log.Info("保存关注的列表到文件")
-	path := "./config/"
-	fileName := "focus.yml"
 	data, err := yaml.Marshal(f.focusList)
 	if err != nil {
 		f.log.ErrorFields("yml文件转换失败", logger.Fields{"err": err})
 	}
-	err = file.CreateFileWithDir(path, fileName, data)
+	err = file.CreateFileWithDir(C.Path.Focus(), data)
 	if err != nil {
 		f.log.ErrorFields("yml文件写入失败", logger.Fields{"err": err})
 	}

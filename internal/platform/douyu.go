@@ -237,7 +237,7 @@ func (d *DouYu) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {
 		GameFullName: info.Data.CateName,
 		LiveStatus:   lo.If(info.Data.RoomStatus == "1", 2).Else(0),
 	}
-	if _, ok := global.FocusMap[global.FormatKey(liveroom.FocusKey, Douyu, roomId)]; ok {
+	if _, ok := global.FocusMap.Get(global.FormatKey(liveroom.FocusKey, Douyu, roomId)); ok {
 		roomInfo.Favorite = true
 	}
 	return roomInfo, nil

@@ -214,7 +214,7 @@ func (b *Bilibili) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {
 		GameFullName: resp.Data.RoomInfo.AreaName,
 		LiveStatus:   lo.If(resp.Data.RoomInfo.LiveStatus == 1, 2).Else(0),
 	}
-	if _, ok := global.FocusMap[global.FormatKey(liveroom.FocusKey, Bili, roomId)]; ok {
+	if _, ok := global.FocusMap.Get(global.FormatKey(liveroom.FocusKey, Bili, roomId)); ok {
 		roomInfo.Favorite = true
 	}
 	return roomInfo, err

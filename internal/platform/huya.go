@@ -290,7 +290,7 @@ func (h *HuYa) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {
 	roomInfo.Platform = "huya"
 	roomInfo.PlatformName = liveroom.GetPlatform(roomInfo.Platform)
 	roomInfo.RoomId = roomId
-	if _, ok := global.FocusMap[global.FormatKey(liveroom.FocusKey, roomInfo.Platform, roomInfo.RoomId)]; ok {
+	if _, ok := global.FocusMap.Get(global.FormatKey(liveroom.FocusKey, roomInfo.Platform, roomInfo.RoomId)); ok {
 		roomInfo.Favorite = true
 	}
 	return roomInfo, nil
@@ -416,7 +416,7 @@ func (h *HuYa) GetRecommend(page, pageSize int) ([]liveroom.LiveRoomInfo, error)
 				GameFullName: resp.Data.Datas[i].GameFullName,
 				LiveStatus:   2,
 			}
-			if _, ok := global.FocusMap[global.FormatKey(liveroom.FocusKey, roomInfo.Platform, roomInfo.RoomId)]; ok {
+			if _, ok := global.FocusMap.Get(global.FormatKey(liveroom.FocusKey, roomInfo.Platform, roomInfo.RoomId)); ok {
 				roomInfo.Favorite = true
 			}
 			roomInfos = append(roomInfos, roomInfo)

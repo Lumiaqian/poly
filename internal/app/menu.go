@@ -1,6 +1,7 @@
 package app
 
 import (
+	C "changeme/internal/constant"
 	"changeme/internal/liveroom"
 
 	"github.com/wailsapp/wails/lib/logger"
@@ -62,7 +63,7 @@ func (a *App) LoadFocus() []liveroom.LiveRoomInfo {
 
 // 加载指定位置的文件
 func (a *App) LoadLocalFocus() []liveroom.LiveRoomInfo {
-	path := "./config/focus.yml"
+	path := C.Path.Focus()
 	err := a.Server.focusService.InitFocus(path)
 	//a.log.InfoFields("")
 	if err != nil {
