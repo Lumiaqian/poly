@@ -4,6 +4,7 @@ import (
 	"changeme/internal/focus"
 	"changeme/internal/liveroom"
 	"changeme/internal/platform"
+	"context"
 	"math"
 	"sync"
 
@@ -17,6 +18,7 @@ type Server struct {
 	huya         platform.HuYa
 	douyu        platform.DouYu
 	bilibili     platform.Bilibili
+	ctx          context.Context
 }
 
 func NewServer() *Server {
@@ -26,7 +28,12 @@ func NewServer() *Server {
 		huya:         platform.NewHuYa(),
 		douyu:        platform.NewDoYu(),
 		bilibili:     platform.NewBilibili(),
+		ctx:          nil,
 	}
+}
+
+func (s *Server) SetContext(ctx context.Context) {
+	s.ctx = ctx
 }
 
 // 获取直播流
@@ -35,7 +42,7 @@ func (s *Server) GetLiveRoom(platformName, roomId string) liveroom.LiveRoom {
 	room := liveroom.LiveRoom{}
 	switch platformName {
 	case platform.Huya:
-		room, err := s.huya.GetLiveUrl(roomId)
+		room, err := s.huya.GetLiveUrl(s.ctx, roomId)
 		if err != nil {
 			s.log.InfoFields("huya.GetLiveUrl", logger.Fields{"error": err})
 			return liveroom.LiveRoom{}
@@ -43,7 +50,7 @@ func (s *Server) GetLiveRoom(platformName, roomId string) liveroom.LiveRoom {
 		s.log.InfoFields("huya.GetLiveUrl", logger.Fields{"room": room})
 		return *room
 	case platform.Bili:
-		room, err := s.bilibili.GetLiveUrl(roomId)
+		room, err := s.bilibili.GetLiveUrl(s.ctx, roomId)
 		if err != nil {
 			s.log.InfoFields("bilibili.GetLiveUrl", logger.Fields{"error": err})
 			return liveroom.LiveRoom{}
@@ -51,7 +58,7 @@ func (s *Server) GetLiveRoom(platformName, roomId string) liveroom.LiveRoom {
 		s.log.InfoFields("bilibili.GetLiveUrl", logger.Fields{"room": room})
 		return *room
 	case platform.Douyu:
-		room, err := s.douyu.GetLiveUrl(roomId)
+		room, err := s.douyu.GetLiveUrl(s.ctx, roomId)
 		if err != nil {
 			s.log.InfoFields("douyu.GetLiveUrl", logger.Fields{"error": err})
 			return liveroom.LiveRoom{}
@@ -83,28 +90,28 @@ func (a *Server) ChangeQualityFromD2Art(qualities []liveroom.Quality) []liveroom
 }
 
 // 获取直播间详情
-func (a *Server) GetLiveRoomInfo(platformName, roomId string) liveroom.LiveRoomInfo {
+func (s *Server) GetLiveRoomInfo(platformName, roomId string) liveroom.LiveRoomInfo {
 	roomInfo := liveroom.LiveRoomInfo{}
-	a.log.InfoFields("GetLiveRoomInfo", logger.Fields{"platformName": platformName})
+	s.log.InfoFields("GetLiveRoomInfo", logger.Fields{"platformName": platformName})
 	switch platformName {
 	case platform.Huya:
-		roomInfo, err := a.huya.GetRoomInfo(roomId)
+		roomInfo, err := s.huya.GetRoomInfo(s.ctx, roomId)
 		if err != nil {
-			a.log.ErrorFields("huya.GetRoomInfo Err", logger.Fields{"error": err})
+			s.log.ErrorFields("huya.GetRoomInfo Err", logger.Fields{"error": err})
 			return roomInfo
 		}
 		return roomInfo
 	case platform.Bili:
-		roomInfo, err := a.bilibili.GetRoomInfo(roomId)
+		roomInfo, err := s.bilibili.GetRoomInfo(s.ctx, roomId)
 		if err != nil {
-			a.log.ErrorFields("bilibili.GetRoomInfo Err", logger.Fields{"error": err})
+			s.log.ErrorFields("bilibili.GetRoomInfo Err", logger.Fields{"error": err})
 			return roomInfo
 		}
 		return roomInfo
 	case platform.Douyu:
-		roomInfo, err := a.douyu.GetRoomInfo(roomId)
+		roomInfo, err := s.douyu.GetRoomInfo(s.ctx, roomId)
 		if err != nil {
-			a.log.ErrorFields("douyu.GetRoomInfo Err", logger.Fields{"error": err})
+			s.log.ErrorFields("douyu.GetRoomInfo Err", logger.Fields{"error": err})
 			return roomInfo
 		}
 		return roomInfo
@@ -113,12 +120,12 @@ func (a *Server) GetLiveRoomInfo(platformName, roomId string) liveroom.LiveRoomI
 }
 
 // 获取关注列表
-func (a *Server) GetFocus() []liveroom.LiveRoomInfo {
-	return a.focusService.GetFocusRoomInfo()
+func (s *Server) GetFocus() []liveroom.LiveRoomInfo {
+	return s.focusService.GetFocusRoomInfo(s.ctx)
 }
 
 // 获取All推荐列表
-func (a *Server) GetRecommend(page, pageSize int) []liveroom.LiveRoomInfo {
+func (s *Server) GetRecommend(page, pageSize int) []liveroom.LiveRoomInfo {
 	roomInfos := make([]liveroom.LiveRoomInfo, 0, pageSize)
 	wg := sync.WaitGroup{}
 	ch := make(chan []liveroom.LiveRoomInfo)
@@ -126,7 +133,7 @@ func (a *Server) GetRecommend(page, pageSize int) []liveroom.LiveRoomInfo {
 
 	go func(page, pageSize int) {
 		defer wg.Done()
-		list, err := a.huya.GetRecommend(page, pageSize)
+		list, err := s.huya.GetRecommend(s.ctx, page, pageSize)
 		if err != nil {
 			return
 		}
@@ -135,7 +142,7 @@ func (a *Server) GetRecommend(page, pageSize int) []liveroom.LiveRoomInfo {
 
 	go func(page, pageSize int) {
 		defer wg.Done()
-		list, err := a.douyu.GetRecommend(page, pageSize)
+		list, err := s.douyu.GetRecommend(s.ctx, page, pageSize)
 		if err != nil {
 			return
 		}
@@ -144,7 +151,7 @@ func (a *Server) GetRecommend(page, pageSize int) []liveroom.LiveRoomInfo {
 
 	go func(page, pageSize int) {
 		defer wg.Done()
-		list, err := a.bilibili.GetRecommend(page, pageSize)
+		list, err := s.bilibili.GetRecommend(s.ctx, page, pageSize)
 		if err != nil {
 			return
 		}

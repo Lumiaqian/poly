@@ -1,13 +1,14 @@
 package platform
 
 import (
+	"context"
 	"testing"
 )
 
 var douyu = NewDoYu()
 
 func TestGetRealUrl(t *testing.T) {
-	room, err := douyu.GetRealUrl("7084089", "hls")
+	room, err := douyu.GetRealUrl(context.Background(), "7084089", "hls")
 	if err != nil {
 		t.Fail()
 	}
@@ -15,7 +16,7 @@ func TestGetRealUrl(t *testing.T) {
 }
 
 func TestGetDouyuLiveUrl(t *testing.T) {
-	liveUrl, err := douyu.GetLiveUrl("7084089")
+	liveUrl, err := douyu.GetLiveUrl(context.Background(), "7084089")
 	if err != nil {
 		t.Fail()
 	}
@@ -23,7 +24,7 @@ func TestGetDouyuLiveUrl(t *testing.T) {
 }
 
 func TestGetDouyuRoomInfo(t *testing.T) {
-	roomInfo, err := douyu.GetRoomInfo("687423")
+	roomInfo, err := douyu.GetRoomInfo(context.Background(), "687423")
 	if err != nil {
 		t.Fail()
 	}
@@ -31,7 +32,7 @@ func TestGetDouyuRoomInfo(t *testing.T) {
 }
 
 func TestDouyuGetRecommend(t *testing.T) {
-	list, err := douyu.GetRecommend(2, 12)
+	list, err := douyu.GetRecommend(context.Background(), 2, 12)
 	if err != nil {
 		t.Error(err)
 	}

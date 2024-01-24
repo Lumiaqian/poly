@@ -3,10 +3,13 @@ package platform
 import (
 	"changeme/internal/global"
 	"changeme/internal/liveroom"
+	"changeme/pkg/log"
 	"changeme/pkg/request"
+	"context"
 	"crypto/md5"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -17,6 +20,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Lumiaqian/go-sdk-core/rest"
+	"github.com/Lumiaqian/go-sdk-core/rest/middleware"
 	"github.com/guonaihong/gout"
 	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
@@ -24,10 +29,11 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/wailsapp/wails"
 	"github.com/wailsapp/wails/lib/logger"
+	wails_logger "github.com/wailsapp/wails/lib/logger"
 )
 
 type HuYa struct {
-	httpClient http.Client
+	httpClient rest.Client
 	log        *wails.CustomLogger
 	cache      cache.Cache
 }
@@ -53,9 +59,14 @@ var (
 )
 
 func NewHuYa() HuYa {
+	wailsLogger := wails_logger.NewCustomLogger("huya")
+	logger := log.NewLogAdapter(wailsLogger)
+	logmiddleware := middleware.NewLogMiddleware(logger)
+	httpClient := rest.NewDefaultHttpClient()
+	httpClient.Use(logmiddleware)
 	huya := HuYa{
-		httpClient: http.Client{Timeout: time.Second * 5},
-		log:        logger.NewCustomLogger("huya"),
+		httpClient: httpClient,
+		log:        wailsLogger,
 		cache:      *global.Cache,
 	}
 	huya.InitAreaCache()
@@ -63,26 +74,19 @@ func NewHuYa() HuYa {
 }
 
 // 获取真实直播流
-func (h *HuYa) GetLiveUrl(roomId string) (*liveroom.LiveRoom, error) {
+func (h *HuYa) GetLiveUrl(ctx context.Context, roomId string) (*liveroom.LiveRoom, error) {
 	roomUrl := "https://m.huya.com/" + roomId
-	request, err := http.NewRequest("GET", roomUrl, nil)
+	header := make(map[string]string)
+	header["Content-Type"] = "application/x-www-form-urlencoded"
+	header["User-Agent"] = "Mozilla/5.0 (Linux; Android 5.0; SM-G900P Build/LRX21T) " +
+		"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Mobile Safari/537.36"
+	response, err := h.httpClient.DoRequest(ctx, "GET", roomUrl, header, &rest.RequestPayload{})
 	if err != nil {
 		return nil, err
 	}
-	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	request.Header.Set("User-Agent", "Mozilla/5.0 (Linux; Android 5.0; SM-G900P Build/LRX21T) "+
-		"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Mobile Safari/537.36")
-	response, err := h.httpClient.Do(request)
-	if err != nil {
-		return nil, err
-	}
-	defer response.Body.Close()
-	result, err := io.ReadAll(response.Body)
-	if err != nil {
-		return nil, err
-	}
+
 	reg := regexp.MustCompile("<script> window.HNF_GLOBAL_INIT = (.*)</script>")
-	submatch := reg.FindStringSubmatch(string(result))
+	submatch := reg.FindStringSubmatch(string(response.Body))
 	if submatch == nil || len(submatch) < 2 {
 		return nil, errors.Wrap(err, "查询失败！")
 	}
@@ -90,7 +94,7 @@ func (h *HuYa) GetLiveUrl(roomId string) (*liveroom.LiveRoom, error) {
 	if err != nil {
 		return nil, err
 	}
-	streamInfoList, err := h.GetStreamInfo(roomId)
+	streamInfoList, err := h.GetStreamInfo(ctx, roomId)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +112,7 @@ func (h *HuYa) GetLiveUrl(roomId string) (*liveroom.LiveRoom, error) {
 		quality.Type = GetType(quality.Url)
 		room.Quality = append(room.Quality, quality)
 	}
-	roomInfo, err := h.GetRoomInfo(roomId)
+	roomInfo, err := h.GetRoomInfo(ctx, roomId)
 	if err != nil {
 		h.log.ErrorFields("GetRoomInfo Error", logger.Fields{"err": err, "roomInfo": roomInfo})
 		return room, nil
@@ -148,27 +152,20 @@ func parseAntiCode(anticode, uid, streamName string) string {
 	if err != nil {
 		return ""
 	}
-	uidInt, _ := strconv.Atoi(uid)
-	qr.Set("ver", "1")
-	qr.Set("sv", "2110211124")
-	qr.Set("seqid", strconv.FormatInt(time.Now().Unix()*1000+int64(uidInt), 10))
-	qr.Set("uid", uid)
-	qr.Set("uuid", strconv.Itoa(getUuid()))
-	ss := MD5([]byte(fmt.Sprintf("%s|%s|%s", qr.Get("seqid"), qr.Get("ctype"), qr.Get("t"))))
+
+	t := "0"
+	f := strconv.FormatInt(time.Now().UnixNano()/100, 10)
+	wsTime := qr.Get("wsTime")
 
 	decodeString, _ := base64.StdEncoding.DecodeString(qr.Get("fm"))
 	fm := string(decodeString)
-	fm = strings.ReplaceAll(fm, "$0", qr.Get("uid"))
+	fm = strings.ReplaceAll(fm, "$0", t)
 	fm = strings.ReplaceAll(fm, "$1", streamName)
-	fm = strings.ReplaceAll(fm, "$2", ss)
-	fm = strings.ReplaceAll(fm, "$3", qr.Get("wsTime"))
+	fm = strings.ReplaceAll(fm, "$2", f)
+	fm = strings.ReplaceAll(fm, "$3", wsTime)
 
-	qr.Del("fm")
-	qr.Set("wsSecret", MD5([]byte(fm)))
-	if qr.Has("txyp") {
-		qr.Del("txyp")
-	}
-	return qr.Encode()
+	return fmt.Sprintf("wsSecret=%s&wsTime=%s&u=%s&seqid=%s&txyp=%s&fs=%s&sphdcdn=%s&sphdDC=%s&sphd=%s&u=0&t=100&ratio=0",
+		MD5([]byte(fm)), wsTime, t, f, qr.Get("txyp"), qr.Get("fs"), qr.Get("sphdcdn"), qr.Get("sphdDC"), qr.Get("sphd"))
 }
 
 func getAnonymousUid() string {
@@ -195,26 +192,18 @@ func MD5(str []byte) string {
 }
 
 // 获取直播流详细信息
-func (h *HuYa) GetStreamInfo(roomId string) ([]liveroom.StreamInfo, error) {
+func (h *HuYa) GetStreamInfo(ctx context.Context, roomId string) ([]liveroom.StreamInfo, error) {
 	streamInfo := make([]liveroom.StreamInfo, 0)
 	url := "https://www.huya.com/" + roomId
-	request, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	request.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/59.0.3071.115 Safari/537.36")
-	response, err := h.httpClient.Do(request)
-	if err != nil {
-		return nil, err
-	}
-	defer response.Body.Close()
-	result, err := io.ReadAll(response.Body)
+	header := make(map[string]string)
+	header["Content-Type"] = "application/x-www-form-urlencoded"
+	header["User-Agent"] = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/59.0.3071.115 Safari/537.36"
+	response, err := h.httpClient.DoRequest(ctx, "GET", url, header, &rest.RequestPayload{})
 	if err != nil {
 		return nil, err
 	}
 	reg := regexp.MustCompile(`"vMultiStreamInfo":(.*?),"iWebDefaultBitRate"`)
-	submatch := reg.FindStringSubmatch(string(result))
+	submatch := reg.FindStringSubmatch(string(response.Body))
 	if submatch == nil {
 		return nil, errors.Wrap(err, "查询失败！")
 	}
@@ -238,24 +227,18 @@ func GetType(url string) string {
 	return "flv"
 }
 
-func (h *HuYa) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {
+func (h *HuYa) GetRoomInfo(ctx context.Context, roomId string) (liveroom.LiveRoomInfo, error) {
 	roomInfo := liveroom.LiveRoomInfo{}
 	url := "https://www.huya.com/" + roomId
-	request, err := http.NewRequest("GET", url, nil)
+
+	header := make(map[string]string)
+	header["Content-Type"] = "application/x-www-form-urlencoded"
+	header["User-Agent"] = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/59.0.3071.115 Safari/537.36"
+	response, err := h.httpClient.DoRequest(ctx, "GET", url, header, &rest.RequestPayload{})
 	if err != nil {
 		return roomInfo, err
 	}
-	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	request.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/59.0.3071.115 Safari/537.36")
-	response, err := h.httpClient.Do(request)
-	if err != nil {
-		return roomInfo, err
-	}
-	defer response.Body.Close()
-	result, err := io.ReadAll(response.Body)
-	if err != nil {
-		return roomInfo, err
-	}
+	result := response.Body
 	//h.log.InfoFields("房间详情元数据", logger.Fields{"result": string(result)})
 	roomInfo.Anchor = matchString(string(result), Nick)
 	roomInfo.Avatar = matchString(string(result), Avatar)
@@ -361,7 +344,7 @@ func (h *HuYa) GetAllAreaInfo() ([]liveroom.AreaInfo, error) {
 }
 
 // 获取虎牙推荐
-func (h *HuYa) GetRecommend(page, pageSize int) ([]liveroom.LiveRoomInfo, error) {
+func (h *HuYa) GetRecommend(ctx context.Context, page, pageSize int) ([]liveroom.LiveRoomInfo, error) {
 	if list, ok := global.Cache.Get(global.FormatKey(liveroom.RecommendKey, Huya, strconv.Itoa(page), strconv.Itoa(pageSize))); ok {
 		return list.([]liveroom.LiveRoomInfo), nil
 	}
@@ -386,9 +369,11 @@ func (h *HuYa) GetRecommend(page, pageSize int) ([]liveroom.LiveRoomInfo, error)
 			} `json:"datas"`
 		} `json:"data"`
 	}
-	//var resp string
-	err := request.HTTP().GET(fmt.Sprintf("https://www.huya.com/cache.php?m=LiveList&do=getLiveListByPage&tagAll=0&page=%d", realPage)).
-		BindJSON(&resp).Do()
+	response, err := h.httpClient.DoRequest(ctx, "GET", fmt.Sprintf("https://www.huya.com/cache.php?m=LiveList&do=getLiveListByPage&tagAll=0&page=%d", realPage), nil, &rest.RequestPayload{})
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(response.Body, &resp)
 	if err != nil {
 		return nil, err
 	}

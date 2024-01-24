@@ -1,17 +1,18 @@
 package platform
 
 import (
+	"context"
 	"testing"
 )
 
 var huya = NewHuYa()
 
 func TestGetStreamInfo(t *testing.T) {
-	huya.GetStreamInfo("222523")
+	huya.GetStreamInfo(context.Background(), "222523")
 }
 
 func TestGetLiveUrl(t *testing.T) {
-	liveroom, err := huya.GetLiveUrl("102411")
+	liveroom, err := huya.GetLiveUrl(context.Background(), "102411")
 	if err != nil {
 		t.Fail()
 	}
@@ -20,7 +21,7 @@ func TestGetLiveUrl(t *testing.T) {
 }
 
 func TestGetRoomInfo(t *testing.T) {
-	liveRoomInfo, err := huya.GetRoomInfo("333003")
+	liveRoomInfo, err := huya.GetRoomInfo(context.Background(), "333003")
 	if err != nil {
 		t.Fail()
 	}
@@ -44,7 +45,7 @@ func TestGetAllArea(t *testing.T) {
 }
 
 func TestHuyaGetRecommend(t *testing.T) {
-	list, err := huya.GetRecommend(2, 12)
+	list, err := huya.GetRecommend(context.Background(), 2, 12)
 	if err != nil {
 		t.Error(err)
 	}

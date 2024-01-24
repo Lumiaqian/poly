@@ -34,6 +34,7 @@ func (a *App) Startup(ctx context.Context) {
 	// Perform your setup here
 	a.ctx = ctx
 	a.LoadLocalFocus()
+	a.Server.SetContext(ctx)
 }
 
 // domReady is called after front-end resources have been loaded

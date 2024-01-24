@@ -5,6 +5,7 @@ import (
 	"changeme/internal/liveroom"
 	"changeme/internal/platform"
 	"changeme/pkg/file"
+	"context"
 	"os"
 	"sort"
 	"sync"
@@ -57,7 +58,7 @@ func NewFocusService() FocusService {
 	}
 }
 
-func (f *FocusService) InitFocus(path string) error {
+func (f *FocusService) InitFocus(ctx context.Context, path string) error {
 	if len(f.roomList) > 0 {
 		f.roomList = f.roomList[0:0]
 	}
@@ -69,21 +70,21 @@ func (f *FocusService) InitFocus(path string) error {
 	if err != nil {
 		return err
 	}
-	f.getFocusRoomInfo()
+	f.getFocusRoomInfo(ctx)
 	return nil
 }
 
-func (f *FocusService) GetFocusRoomInfo() []liveroom.LiveRoomInfo {
-	return f.getFocusRoomInfo()
+func (f *FocusService) GetFocusRoomInfo(ctx context.Context) []liveroom.LiveRoomInfo {
+	return f.getFocusRoomInfo(ctx)
 }
 
-func (f *FocusService) getFocusRoomInfo() []liveroom.LiveRoomInfo {
+func (f *FocusService) getFocusRoomInfo(ctx context.Context) []liveroom.LiveRoomInfo {
 	f.roomList = f.roomList[0:0]
 
 	if global.FocusMap.ItemCount() > 0 {
 		f.focusList.Focus = f.focusList.Focus[0:0]
 		for _, item := range global.FocusMap.Items() {
-			val := item.Object.(*liveroom.LiveRoomInfo)
+			val := item.Object.(liveroom.LiveRoomInfo)
 			f.focusList.Focus = append(f.focusList.Focus, Item{
 				Platform: val.Platform,
 				RoomId:   val.RoomId,
@@ -92,10 +93,10 @@ func (f *FocusService) getFocusRoomInfo() []liveroom.LiveRoomInfo {
 		}
 	}
 
-	ch := make(chan *liveroom.LiveRoomInfo)
+	ch := make(chan liveroom.LiveRoomInfo)
 	f.wg.Add(len(f.focusList.Focus))
 	for _, focus := range f.focusList.Focus {
-		go f.getRoomInfo(focus, ch)
+		go f.getRoomInfo(ctx, focus, ch)
 	}
 
 	go func() {
@@ -103,44 +104,44 @@ func (f *FocusService) getFocusRoomInfo() []liveroom.LiveRoomInfo {
 		close(ch)
 	}()
 	for info := range ch {
-		f.roomList = append(f.roomList, *info)
+		f.roomList = append(f.roomList, info)
 		global.FocusMap.Set(global.FormatKey(FocusName, info.Platform, info.RoomId), info, cache.NoExpiration)
 	}
 	sort.Sort(liveroom.LiveRoomInfoArray(f.roomList))
 	return f.roomList
 }
 
-func (f *FocusService) getRoomInfo(focus Item, ch chan *liveroom.LiveRoomInfo) {
+func (f *FocusService) getRoomInfo(ctx context.Context, focus Item, ch chan liveroom.LiveRoomInfo) {
 	defer f.wg.Done()
 	if roomInfo, ok := global.Cache.Get(global.FormatKey(FocusName, focus.Platform, focus.RoomId)); ok {
-		ch <- roomInfo.(*liveroom.LiveRoomInfo)
+		ch <- roomInfo.(liveroom.LiveRoomInfo)
 		return
 	}
 	switch focus.Platform {
 	case platform.Huya:
-		roomInfo, err := f.huya.GetRoomInfo(focus.RoomId)
+		roomInfo, err := f.huya.GetRoomInfo(ctx, focus.RoomId)
 		if err != nil {
 			f.log.ErrorFields("GetRoomInfo Huya Err", logger.Fields{"err": err})
 			return
 		}
-		global.Cache.Set(global.FormatKey(FocusName, focus.Platform, focus.RoomId), &roomInfo, 3*time.Minute)
-		ch <- &roomInfo
+		global.Cache.Set(global.FormatKey(FocusName, focus.Platform, focus.RoomId), roomInfo, 3*time.Minute)
+		ch <- roomInfo
 	case platform.Bili:
-		roomInfo, err := f.bilibili.GetRoomInfo(focus.RoomId)
+		roomInfo, err := f.bilibili.GetRoomInfo(ctx, focus.RoomId)
 		if err != nil {
 			f.log.ErrorFields("GetRoomInfo Bilibili Err", logger.Fields{"err": err})
 			return
 		}
-		global.Cache.Set(global.FormatKey(FocusName, focus.Platform, focus.RoomId), &roomInfo, 3*time.Minute)
-		ch <- &roomInfo
+		global.Cache.Set(global.FormatKey(FocusName, focus.Platform, focus.RoomId), roomInfo, 3*time.Minute)
+		ch <- roomInfo
 	case platform.Douyu:
-		roomInfo, err := f.douyu.GetRoomInfo(focus.RoomId)
+		roomInfo, err := f.douyu.GetRoomInfo(ctx, focus.RoomId)
 		if err != nil {
 			f.log.ErrorFields("GetRoomInfo douyu Err", logger.Fields{"err": err})
 			return
 		}
-		global.Cache.Set(global.FormatKey(FocusName, focus.Platform, focus.RoomId), &roomInfo, 3*time.Minute)
-		ch <- &roomInfo
+		global.Cache.Set(global.FormatKey(FocusName, focus.Platform, focus.RoomId), roomInfo, 3*time.Minute)
+		ch <- roomInfo
 	}
 }
 

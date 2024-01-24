@@ -49,7 +49,7 @@ func (a *App) LoadFocus() []liveroom.LiveRoomInfo {
 		a.log.ErrorFields("LoadFocus SelectFile Err", logger.Fields{"err": err})
 		return nil
 	}
-	err = a.Server.focusService.InitFocus(path)
+	err = a.Server.focusService.InitFocus(a.ctx, path)
 	//a.log.InfoFields("")
 	if err != nil {
 		a.MessageDialog("加载关注列表", "失败！")
@@ -64,7 +64,7 @@ func (a *App) LoadFocus() []liveroom.LiveRoomInfo {
 // 加载指定位置的文件
 func (a *App) LoadLocalFocus() []liveroom.LiveRoomInfo {
 	path := C.Path.Focus()
-	err := a.Server.focusService.InitFocus(path)
+	err := a.Server.focusService.InitFocus(a.ctx, path)
 	//a.log.InfoFields("")
 	if err != nil {
 		a.MessageDialog("加载关注列表失败", "请从菜单->配置中选择文件加载")

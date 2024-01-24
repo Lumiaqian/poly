@@ -3,26 +3,30 @@ package platform
 import (
 	"changeme/internal/global"
 	"changeme/internal/liveroom"
-	"changeme/pkg/request"
+	"changeme/pkg/log"
+	"context"
+	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/guonaihong/gout"
+	"github.com/Lumiaqian/go-sdk-core/rest"
+	"github.com/Lumiaqian/go-sdk-core/rest/middleware"
+	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"github.com/tidwall/gjson"
 	"github.com/wailsapp/wails"
 	"github.com/wailsapp/wails/lib/logger"
+	wails_logger "github.com/wailsapp/wails/lib/logger"
 )
 
 type Bilibili struct {
-	httpClient http.Client
+	httpClient rest.Client
 	log        *wails.CustomLogger
+	cache      cache.Cache
 }
 
 type RoomInit struct {
@@ -45,16 +49,22 @@ const (
 )
 
 func NewBilibili() Bilibili {
+	wailsLogger := wails_logger.NewCustomLogger("Bilibili")
+	logger := log.NewLogAdapter(wailsLogger)
+	logmiddleware := middleware.NewLogMiddleware(logger)
+	httpClient := rest.NewDefaultHttpClient()
+	httpClient.Use(logmiddleware)
 	return Bilibili{
-		httpClient: http.Client{},
-		log:        logger.NewCustomLogger(Bili),
+		httpClient: httpClient,
+		log:        wailsLogger,
+		cache:      *global.Cache,
 	}
 }
 
 // 获取哔哩哔哩直播的真实流媒体地址，默认获取直播间提供的最高画质
-func (b *Bilibili) GetLiveUrl(roomId string) (*liveroom.LiveRoom, error) {
+func (b *Bilibili) GetLiveUrl(ctx context.Context, roomId string) (*liveroom.LiveRoom, error) {
 	//先获取直播状态和真实房间号
-	roomInit, err := b.getRealRid(roomId)
+	roomInit, err := b.getRealRid(ctx, roomId)
 	if err != nil {
 		return nil, errors.Wrap(err, "getRealRid err")
 	}
@@ -62,7 +72,7 @@ func (b *Bilibili) GetLiveUrl(roomId string) (*liveroom.LiveRoom, error) {
 	if roomInit.LiveStatus == 0 {
 		return nil, errors.New("未开播或直播间不存在")
 	}
-	realUrl, err := b.GetUrl(roomInit.RoomId, BilibiliOD)
+	realUrl, err := b.GetUrl(ctx, roomInit.RoomId, BilibiliOD)
 	if err != nil {
 		return nil, errors.Wrap(err, "GetUrl err")
 	}
@@ -76,18 +86,19 @@ func (b *Bilibili) GetLiveUrl(roomId string) (*liveroom.LiveRoom, error) {
 }
 
 // 获取直播状态和真实房间号
-func (b *Bilibili) getRealRid(roomId string) (RoomInit, error) {
+func (b *Bilibili) getRealRid(ctx context.Context, roomId string) (RoomInit, error) {
 	roomInit := RoomInit{}
 	url := "https://api.live.bilibili.com/room/v1/Room/room_init?id=" + roomId
-	result, err := b.HttpGet(url)
+	header := make(map[string]string)
+	header["User-Agent"] = "Mozilla/5.0 (Linux; Android 5.0; SM-G900P Build/LRX21T) " +
+		"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Mobile Safari/537.36"
+	response, err := b.httpClient.DoRequest(ctx, "GET", url, header, &rest.RequestPayload{})
 	if err != nil {
 		return roomInit, err
 	}
-	if err != nil {
-		return roomInit, err
-	}
-	b.log.InfoFields("getRealRid结果：", logger.Fields{"result": string(result)})
-	parse := gjson.Parse(string(result))
+	result := string(response.Body)
+	b.log.InfoFields("getRealRid结果：", logger.Fields{"result": result})
+	parse := gjson.Parse(result)
 	roomInit.LiveStatus = int(parse.Get("data.live_status").Int())
 	roomInit.RoomId = parse.Get("data.room_id").String()
 	roomInit.ShortId = parse.Get("data.short_id").String()
@@ -96,7 +107,7 @@ func (b *Bilibili) getRealRid(roomId string) (RoomInit, error) {
 }
 
 // 获取哔哩哔哩直播的真实流媒体地址，默认获取直播间提供的最高画质
-func (b *Bilibili) GetUrl(roomId string, qn int) (string, error) {
+func (b *Bilibili) GetUrl(ctx context.Context, roomId string, qn int) (string, error) {
 	baseUrl := "https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo?" +
 		"room_id=" + roomId +
 		"&protocol=0,1" +
@@ -105,10 +116,14 @@ func (b *Bilibili) GetUrl(roomId string, qn int) (string, error) {
 		"&platform=h5" +
 		"&ptype=8"
 	url := baseUrl + "&qn=" + strconv.Itoa(qn)
-	result, err := b.HttpGet(url)
+	header := make(map[string]string)
+	header["User-Agent"] = "Mozilla/5.0 (Linux; Android 5.0; SM-G900P Build/LRX21T) " +
+		"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Mobile Safari/537.36"
+	response, err := b.httpClient.DoRequest(ctx, "GET", url, header, &rest.RequestPayload{})
 	if err != nil {
 		return "", err
 	}
+	result := string(response.Body)
 	b.log.InfoFields("getRoomPlayInfo结果：", logger.Fields{"result": string(result)})
 	parse := gjson.Parse(string(result))
 	streamInfo := parse.Get("data.playurl_info.playurl.stream").Array()
@@ -123,10 +138,12 @@ func (b *Bilibili) GetUrl(roomId string, qn int) (string, error) {
 	}
 	b.log.InfoFields("qnMax结果：", logger.Fields{"qnMax": qnMax})
 	if qnMax != qn {
-		result, err = b.HttpGet(baseUrl + "&qn=" + strconv.Itoa(qnMax))
+		url = baseUrl + "&qn=" + strconv.Itoa(qnMax)
+		response, err := b.httpClient.DoRequest(ctx, "GET", url, header, &rest.RequestPayload{})
 		if err != nil {
 			return "", err
 		}
+		result := string(response.Body)
 		b.log.InfoFields("再次getRoomPlayInfo结果：", logger.Fields{"result": string(result)})
 		parse = gjson.Parse(string(result))
 		streamInfo = parse.Get("data.playurl_info.playurl.stream").Array()
@@ -152,28 +169,7 @@ func (b *Bilibili) GetUrl(roomId string, qn int) (string, error) {
 	return urls[0], nil
 }
 
-// Get请求
-func (b *Bilibili) HttpGet(url string) (string, error) {
-	request, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return "", err
-	}
-	request.Header.Set("User-Agent", "Mozilla/5.0 (Linux; Android 5.0; SM-G900P Build/LRX21T) "+
-		"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Mobile Safari/537.36")
-	response, err := b.httpClient.Do(request)
-	if err != nil {
-		return "", err
-	}
-	defer response.Body.Close()
-	result, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		return "", err
-	}
-	b.log.InfoFields("HttpGet结果：", logger.Fields{"result": string(result)})
-	return string(result), nil
-}
-
-func (b *Bilibili) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {
+func (b *Bilibili) GetRoomInfo(ctx context.Context, roomId string) (liveroom.LiveRoomInfo, error) {
 	roomInfo := liveroom.LiveRoomInfo{}
 	var resp struct {
 		Code    int    `json:"code"`
@@ -194,10 +190,11 @@ func (b *Bilibili) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {
 			} `json:"anchor_info"`
 		} `json:"data"`
 	}
-	err := request.HTTP().GET(fmt.Sprintf("https://api.live.bilibili.com/xlive/web-room/v1/index/getH5InfoByRoom?room_id=%s", roomId)).
-		SetHeader(gout.H{"User-Agent": "Mozilla/5.0 (Linux; Android 5.0; SM-G900P Build/LRX21T) " +
-			"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Mobile Safari/537.36"}).
-		BindJSON(&resp).Do()
+	response, err := b.httpClient.DoRequest(ctx, "GET", fmt.Sprintf("https://api.live.bilibili.com/xlive/web-room/v1/index/getH5InfoByRoom?room_id=%s", roomId), nil, &rest.RequestPayload{})
+	if err != nil {
+		return roomInfo, err
+	}
+	err = json.Unmarshal(response.Body, &resp)
 	if err != nil {
 		return roomInfo, err
 	}
@@ -221,8 +218,8 @@ func (b *Bilibili) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {
 }
 
 // 获取哔哩哔哩推荐
-func (b *Bilibili) GetRecommend(page, pageSize int) ([]liveroom.LiveRoomInfo, error) {
-	if list, ok := global.Cache.Get(global.FormatKey(liveroom.RecommendKey, Bili, strconv.Itoa(page), strconv.Itoa(pageSize))); ok {
+func (b *Bilibili) GetRecommend(ctx context.Context, page, pageSize int) ([]liveroom.LiveRoomInfo, error) {
+	if list, ok := b.cache.Get(global.FormatKey(liveroom.RecommendKey, Bili, strconv.Itoa(page), strconv.Itoa(pageSize))); ok {
 		return list.([]liveroom.LiveRoomInfo), nil
 	}
 	var resp struct {
@@ -239,8 +236,11 @@ func (b *Bilibili) GetRecommend(page, pageSize int) ([]liveroom.LiveRoomInfo, er
 			AreaName string `json:"area_name"`
 		} `json:"data"`
 	}
-	err := request.HTTP().GET(fmt.Sprintf("https://api.live.bilibili.com/room/v1/room/get_user_recommend?page=%d&page_size=%d", page, pageSize)).
-		BindJSON(&resp).Do()
+	response, err := b.httpClient.DoRequest(ctx, "GET", fmt.Sprintf("https://api.live.bilibili.com/room/v1/room/get_user_recommend?page=%d&page_size=%d", page, pageSize), nil, &rest.RequestPayload{})
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(response.Body, &resp)
 	if err != nil {
 		return nil, err
 	}
@@ -262,7 +262,7 @@ func (b *Bilibili) GetRecommend(page, pageSize int) ([]liveroom.LiveRoomInfo, er
 				AreaName string `json:"area_name"`
 			}) {
 				defer wg.Done()
-				room, err := b.GetRoomInfo(strconv.Itoa(res.RoomId))
+				room, err := b.GetRoomInfo(ctx, strconv.Itoa(res.RoomId))
 				if err != nil {
 					b.log.Error(err.Error())
 					return
@@ -278,6 +278,6 @@ func (b *Bilibili) GetRecommend(page, pageSize int) ([]liveroom.LiveRoomInfo, er
 			roomInfos = append(roomInfos, *info)
 		}
 	}
-	global.Cache.Set(global.FormatKey(liveroom.RecommendKey, Bili, strconv.Itoa(page), strconv.Itoa(pageSize)), roomInfos, 10*time.Minute)
+	b.cache.Set(global.FormatKey(liveroom.RecommendKey, Bili, strconv.Itoa(page), strconv.Itoa(pageSize)), roomInfos, 10*time.Minute)
 	return roomInfos, nil
 }

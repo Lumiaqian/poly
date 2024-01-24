@@ -1,12 +1,15 @@
 package focus
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 var focusService = NewFocusService()
 
 func TestGetFocusRoomInfo(t *testing.T) {
-	focusService.InitFocus("/Users/lumiaqian/Desktop/focus.yml")
-	list := focusService.GetFocusRoomInfo()
+	focusService.InitFocus(context.TODO(), "/Users/lumiaqian/Desktop/focus.yml")
+	list := focusService.GetFocusRoomInfo(context.TODO())
 	if list == nil {
 		t.Fail()
 	}

@@ -3,7 +3,8 @@ package platform
 import (
 	"changeme/internal/global"
 	"changeme/internal/liveroom"
-	"changeme/pkg/request"
+	"changeme/pkg/log"
+	"context"
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
@@ -14,12 +15,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Lumiaqian/go-sdk-core/rest"
+	"github.com/Lumiaqian/go-sdk-core/rest/middleware"
 	"github.com/dop251/goja"
 	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"github.com/wailsapp/wails"
 	"github.com/wailsapp/wails/lib/logger"
+	wails_logger "github.com/wailsapp/wails/lib/logger"
 )
 
 /*
@@ -35,7 +39,7 @@ const (
 )
 
 type DouYu struct {
-	httpClient http.Client
+	httpClient rest.Client
 	log        *wails.CustomLogger
 	cache      cache.Cache
 }
@@ -60,9 +64,14 @@ type Setting struct {
 }
 
 func NewDoYu() DouYu {
+	wailsLogger := wails_logger.NewCustomLogger("DouYu")
+	logger := log.NewLogAdapter(wailsLogger)
+	logmiddleware := middleware.NewLogMiddleware(logger)
+	httpClient := rest.NewDefaultHttpClient()
+	httpClient.Use(logmiddleware)
 	return DouYu{
-		httpClient: http.Client{},
-		log:        logger.NewCustomLogger(Douyu),
+		httpClient: httpClient,
+		log:        wailsLogger,
 		cache:      *global.Cache,
 	}
 }
@@ -74,18 +83,17 @@ func md5V3(str string) string {
 	return md5str
 }
 
-func (d *DouYu) getDid() (string, error) {
+func (d *DouYu) getDid(ctx context.Context) (string, error) {
 	timeStamp := strconv.FormatInt(time.Now().UnixNano()/1000000, 10)
 	url := "https://passport.douyu.com/lapi/did/api/get?client_id=25&_=" + timeStamp + "&callback=axiosJsonpCallback1"
-	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Add("user-agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.3 Mobile/15E148 Safari/604.1")
-	req.Header.Set("referer", "https://m.douyu.com/")
-	resp, err := d.httpClient.Do(req)
+	header := make(map[string]string)
+	header["user-agent"] = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.3 Mobile/15E148 Safari/604.1"
+	header["referer"] = "https://m.douyu.com/"
+	response, err := d.httpClient.DoRequest(ctx, "GET", url, header, &rest.RequestPayload{})
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body := response.Body
 	re := regexp.MustCompile(`axiosJsonpCallback1\((.*)\)`)
 	match := re.FindStringSubmatch(string(body))
 	var result map[string]map[string]string
@@ -93,26 +101,22 @@ func (d *DouYu) getDid() (string, error) {
 	return result["data"]["did"], nil
 }
 
-func (d *DouYu) GetRealUrl(roomId, streamType string) (*liveroom.LiveRoom, error) {
-	did, err := d.getDid()
+func (d *DouYu) GetRealUrl(ctx context.Context, roomId, streamType string) (*liveroom.LiveRoom, error) {
+	did, err := d.getDid(ctx)
 	if err != nil {
 		return nil, err
 	}
 	var timestamp = time.Now().Unix()
 	liveurl := "https://m.douyu.com/" + roomId
-	client := &http.Client{}
-	r, _ := http.NewRequest("GET", liveurl, nil)
-	r.Header.Add("user-agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.3 Mobile/15E148 Safari/604.1")
-	r.Header.Add("upgrade-insecure-requests", "1")
-	resp, err := client.Do(r)
+	header := make(map[string]string)
+	header["user-agent"] = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.3 Mobile/15E148 Safari/604.1"
+	header["upgrade-insecure-requests"] = "1"
+	response, err := d.httpClient.DoRequest(ctx, "GET", liveurl, header, &rest.RequestPayload{})
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
+	body := response.Body
+
 	roomidreg := regexp.MustCompile(`(?i)rid":(\d{1,8}),"vipId`)
 	roomidres := roomidreg.FindStringSubmatch(string(body))
 	if roomidres == nil {
@@ -191,17 +195,17 @@ func (d *DouYu) GetRealUrl(roomId, streamType string) (*liveroom.LiveRoom, error
 	}
 	room := new(liveroom.LiveRoom)
 	room.LiveUrl = realUrl
-	room.Platform = Platform
+	room.Platform = "douyu"
 	room.PlatformName = liveroom.GetPlatform(room.Platform)
 	room.RoomId = roomId
 	return room, nil
 }
 
-func (d *DouYu) GetLiveUrl(roomId string) (*liveroom.LiveRoom, error) {
-	return d.GetRealUrl(roomId, "hls")
+func (d *DouYu) GetLiveUrl(ctx context.Context, roomId string) (*liveroom.LiveRoom, error) {
+	return d.GetRealUrl(ctx, roomId, "hls")
 }
 
-func (d *DouYu) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {
+func (d *DouYu) GetRoomInfo(ctx context.Context, roomId string) (liveroom.LiveRoomInfo, error) {
 	roomInfo := liveroom.LiveRoomInfo{}
 	var info struct {
 		Error int `json:"error"`
@@ -216,8 +220,12 @@ func (d *DouYu) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {
 			RoomThumb  string `json:"room_thumb"`
 		} `json:"data"`
 	}
-	if err := request.HTTP().GET(fmt.Sprintf("https://open.douyucdn.cn/api/RoomApi/room/%s", roomId)).BindJSON(&info).Do(); err != nil {
-
+	response, err := d.httpClient.DoRequest(ctx, "GET", fmt.Sprintf("https://open.douyucdn.cn/api/RoomApi/room/%s", roomId), nil, &rest.RequestPayload{})
+	if err != nil {
+		return roomInfo, err
+	}
+	err = json.Unmarshal(response.Body, &info)
+	if err != nil {
 		return roomInfo, err
 	}
 	if info.Error != 0 {
@@ -244,7 +252,7 @@ func (d *DouYu) GetRoomInfo(roomId string) (liveroom.LiveRoomInfo, error) {
 }
 
 // 斗鱼获取推荐信息
-func (d *DouYu) GetRecommend(page, pageSize int) ([]liveroom.LiveRoomInfo, error) {
+func (d *DouYu) GetRecommend(ctx context.Context, page, pageSize int) ([]liveroom.LiveRoomInfo, error) {
 	if list, ok := global.Cache.Get(global.FormatKey(liveroom.RecommendKey, Douyu, strconv.Itoa(page), strconv.Itoa(pageSize))); ok {
 		return list.([]liveroom.LiveRoomInfo), nil
 	}
@@ -272,16 +280,19 @@ func (d *DouYu) GetRecommend(page, pageSize int) ([]liveroom.LiveRoomInfo, error
 				} `json:"list"`
 			} `json:"data"`
 		}
-		err := request.HTTP().GET(fmt.Sprintf("https://m.douyu.com/api/room/list?page=%d&type=", i)).
-			BindJSON(&resp).Do()
+		response, err := d.httpClient.DoRequest(ctx, "GET", fmt.Sprintf("https://m.douyu.com/api/room/list?page=%d&type=", i), nil, &rest.RequestPayload{})
 		if err != nil {
 			d.log.Error(err.Error())
+			return nil, err
+		}
+		err = json.Unmarshal(response.Body, &resp)
+		if err != nil {
 			return nil, err
 		}
 		list := []liveroom.LiveRoomInfo{}
 		if resp.Code == 0 {
 			for _, res := range resp.Data.List {
-				room, err := d.GetRoomInfo(strconv.Itoa(res.RoomId))
+				room, err := d.GetRoomInfo(ctx, strconv.Itoa(res.RoomId))
 				if err != nil {
 					d.log.Error(err.Error())
 					return nil, err
